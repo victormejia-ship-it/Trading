@@ -1,24 +1,81 @@
-# Trading — Motor CRO de Riesgo + Trend Following
+# Terminal de Riesgo · Trend Timing
 
-Genera un **Plan de Ejecución con Gestión de Riesgo y Timing** por activo, con reglas deterministas:
+App web privada de estado de mercado, timing de tendencias y gestión de riesgo. Los números los calcula un
+motor determinista; Claude interpreta y redacta con salida JSON validada; unos guardrails en código tienen
+la última palabra.
 
-| Regla | Implementación |
+```
+ yfinance / Finnhub ──► worker/data_sources.py      precios OHLCV 2 años + noticias 24h (con ID)
+                              │
+                              ▼
+ trend_risk/ + worker/features.py                   MOTOR DETERMINISTA: SMA/EMA, RSI, MACD, ATR, fase,
+                              │                     stop por ATR, tamaño 1%, R:R, topes de exposición
+                              ▼
+ worker/llm.py  ── Claude (output_config.format = json_schema)
+   1) Motor de Estado de Mercado   → MERCADO_SCHEMA
+   2) Motor de Timing y Riesgo     → ACTIVO_SCHEMA (uno por activo, en paralelo)
+                              │
+                              ▼
+ worker/guardrails.py                               reglas duras: probabilidades = 100, COMPRAR solo con
+                              │                     R:R ≥ 2 + fase válida + semáforo no ROJO, el LLM solo
+                              ▼                     reduce tamaño/exposición, se descartan noticias inventadas
+ public/data/latest.json (+ history/)  y/o  Supabase (tabla analisis_diario)
+                              │
+                              ▼
+ public/index.html                                  semáforo, watchlist, gráfico, escenarios, calculadora, JSON
+```
+
+## Medidas anti-alucinación
+
+| Medida | Dónde |
 |---|---|
-| Fase del ciclo | `ACUMULACION`, `TENDENCIA_ALCISTA_TEMPRANA`, `TENDENCIA_EXTENDIDA` (>15% sobre SMA50 o RSI>72), `DISTRIBUCION_O_BAJISTA`; si no encaja: `TRANSICION_SIN_FASE_CLARA` |
-| Stop Loss | Soporte estructural (pivote) − 1.5×ATR14 (2.0× si ATR% > 3.5%); se desplaza bajo números redondos |
-| Tamaño | `1% / distancia% al stop`, tope de concentración 25% |
-| Asimetría | R:R a la 1ª resistencia < 1:2 → `ESPERAR_MEJOR_TIMING` / `NO_OPERAR` (indica la entrada que sí cumpliría) |
-| Escenarios | Alcista / Base / Bajista, enteros que suman exactamente 100% |
-| Salidas | 50% en Objetivo 1, 50% con trailing en SMA20; invalidación temporal en N sesiones |
-| Noticias | `news.json` con score [-1,1]; ≤ −0.6 fuerza fase defensiva |
+| Claude no escribe precios: referencia niveles por clave (`nivel_ref`: `stop_loss`, `resistencia_1`…), que el worker resuelve con valores del motor | `schemas.py`, `guardrails.py` |
+| Solo usa lo que está en `<datos>`; lo que falte va en `datos_faltantes` | `llm.py` (prompt del sistema) |
+| Las noticias van delimitadas como contenido de terceros; se citan por ID y se eliminan los ID que no existen | `llm.py`, `guardrails.py` |
+| Tope duro de exposición (SPY < SMA200 → 30%, VIX > 30 → 25%, etc.); no puede haber VERDE si SPY < SMA200 o VIX > 25 | `features.py`, `guardrails.py` |
+| Contra-tesis obligatoria; si viene vacía, se bloquea la compra | esquema + `guardrails.py` |
+| Cada corrección queda visible en `correcciones_guardrail` (también en la web) | `guardrails.py`, `index.html` |
+| Si Claude falla o rechaza la petición, se usa el motor determinista (`fuente: MOTOR_DETERMINISTA`) | `run_daily.py` |
 
-## Uso
+## Puesta en marcha
+
+### 1. Local
 ```bash
 pip install -r requirements.txt
-python analyze.py --csv data/AAPL.csv --news news.json --out reportes/plan.md
-python analyze.py --tickers AAPL NVDA SPY BTC-USD   # requiere yfinance + internet
-python -m pytest -q tests
+cp .env.example .env               # pon ANTHROPIC_API_KEY
+set -a; source .env; set +a
+python -m worker.run_daily --no-llm   # prueba sin coste: solo motor determinista
+python -m worker.run_daily            # con Claude
+python -m http.server -d public 8000  # abre http://localhost:8000
 ```
-CSV: `date,open,high,low,close,volume` diario, ≥ 220 filas. `data/DEMO_SINTETICO.csv` es una serie **sintética** solo para pruebas.
+Edita `watchlist.json` para cambiar índices, activos, % de riesgo y tope por posición.
 
-> Las probabilidades son un scoring heurístico, no un modelo calibrado. No es asesoría de inversión.
+### 2. Automatización diaria (GitHub Actions)
+1. En el repo: **Settings → Secrets and variables → Actions**, añade `ANTHROPIC_API_KEY` (y opcionalmente
+   `FINNHUB_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`).
+2. `.github/workflows/daily.yml` se ejecuta de lunes a viernes a las 22:17 UTC. Corre los tests y el worker,
+   y hace commit de `public/data/`. GitHub solo lanza los workflows programados desde la **rama por defecto**;
+   para probarlo antes, usa *Run workflow* (workflow_dispatch).
+
+### 3. Supabase (opcional, recomendado para la app privada)
+1. Ejecuta `supabase/schema.sql` en el SQL Editor (crea la tabla con RLS: solo usuarios autenticados leen).
+2. El worker hace upsert si existen `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` (la service role key va **solo**
+   en secrets, nunca en el frontend).
+3. En la web, define antes del script principal:
+   `window.APP_CONFIG = { supabaseUrl, supabaseAnonKey, supabaseToken }` (`supabaseToken` = JWT de la sesión
+   del usuario tras iniciar sesión con Supabase Auth).
+
+### Privacidad del hosting
+`public/` es estático. Si el repo o GitHub Pages son públicos, el JSON también lo es. Opciones privadas:
+Cloudflare Pages + Cloudflare Access, Vercel con protección por contraseña, o Supabase con RLS + login.
+
+## Coste orientativo
+Una llamada de mercado + una por activo al día. Con 8 activos son unas 9 llamadas de unos 6-10k tokens de
+entrada cada una. Usa `CLAUDE_MODEL` y `CLAUDE_EFFORT` para ajustar coste y calidad.
+
+## Tests
+```bash
+python -m pytest -q tests     # motor, guardrails y capa LLM con un cliente falso (sin red)
+```
+
+> Las probabilidades no están calibradas con resultados históricos. No es asesoría de inversión.

@@ -1,0 +1,8 @@
+{
+  "indices": ["SPY", "QQQ", "IWM", "DIA", "^VIX", "TLT", "GLD", "HYG"],
+  "activos": ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "BTC-USD"],
+  "riesgo_por_operacion_pct": 1.0,
+  "max_posicion_pct": 25,
+  "historial_dias_grafico": 260,
+  "horas_noticias": 24
+}

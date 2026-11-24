@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal de Riesgo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0d0e0f; --surface-1:#161718; --surface-2:#1e1f21; --line:#2b2d30;
+  --text-primary:#f0efec; --text-secondary:#c3c2b7; --text-muted:#8b8a83;
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --good:#0ca30c; --warn:#c98500; --crit:#e66767; --info:#3987e5;
+  --up:#199e70; --down:#e66767;
+  --mono:'JetBrains Mono',ui-monospace,monospace; --sans:Inter,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text-primary);font:14px/1.45 var(--sans)}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+header h1{font:600 15px var(--mono);margin:0;letter-spacing:.04em}
+.meta{font:12px var(--mono);color:var(--text-muted);display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+select,input,button{background:var(--surface-2);color:var(--text-primary);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:13px var(--mono)}
+button{cursor:pointer} button:hover{border-color:var(--text-muted)}
+main{display:grid;grid-template-columns:minmax(360px,500px) 1fr;gap:16px;padding:16px;max-width:1600px;margin:0 auto}
+@media (max-width:980px){main{grid-template-columns:1fr}}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.card h2{font:600 12px var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--text-secondary);margin:0 0 10px}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.mono{font-family:var(--mono)} .muted{color:var(--text-muted)} .sec{color:var(--text-secondary)}
+/* Semáforo */
+.light{display:flex;gap:14px;align-items:center}
+.bulbs{display:flex;flex-direction:column;gap:6px;padding:8px;background:#0a0a0a;border-radius:20px}
+.bulb{width:22px;height:22px;border-radius:50%;background:#2a2a2a;opacity:.35}
+.bulb.on{opacity:1;box-shadow:0 0 14px currentColor}
+.bulb.r{color:var(--crit)} .bulb.y{color:var(--warn)} .bulb.g{color:var(--good)}
+.bulb.on.r{background:var(--crit)} .bulb.on.y{background:var(--warn)} .bulb.on.g{background:var(--good)}
+.big{font:600 18px var(--mono)}
+.bar{height:8px;background:var(--surface-2);border-radius:4px;overflow:hidden;margin:6px 0 2px}
+.bar>span{display:block;height:100%;background:var(--series-1);border-radius:4px}
+/* Tablas */
+table{width:100%;border-collapse:collapse;font:12.5px var(--mono)}
+th{color:var(--text-muted);font-weight:400;text-align:left;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.num,th.num{text-align:right}
+tbody tr.sel{background:var(--surface-2)}
+#watch tbody tr{cursor:pointer} #watch tbody tr:hover{background:var(--surface-2)}
+.scroll{overflow-x:auto}
+/* Chips: icono + texto, nunca solo color */
+.chip{display:inline-flex;gap:4px;align-items:center;padding:2px 7px;border-radius:999px;font:600 11px var(--mono);border:1px solid currentColor;white-space:nowrap}
+.c-good{color:var(--good)} .c-warn{color:var(--warn)} .c-crit{color:var(--crit)} .c-info{color:var(--info)} .c-mut{color:var(--text-secondary)}
+/* Detalle */
+.det-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between}
+#chart{height:420px;width:100%;position:relative}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font:12px var(--mono);color:var(--text-secondary);margin:8px 0}
+.legend i{display:inline-block;width:14px;height:2px;vertical-align:middle;margin-right:5px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px} @media (max-width:700px){.grid2{grid-template-columns:1fr}}
+.esc{display:grid;grid-template-columns:80px 1fr 52px;gap:8px;align-items:center;margin:8px 0;font:12.5px var(--mono)}
+.esc .track{height:14px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.esc .fill{height:100%;border-radius:0 4px 4px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font:12.5px var(--mono)}
+.kv dt{color:var(--text-muted)} .kv dd{margin:0;text-align:right}
+ul.tight{margin:4px 0;padding-left:18px} ul.tight li{margin:3px 0}
+.warnbox{border-left:3px solid var(--warn);padding:6px 10px;background:var(--surface-2);border-radius:4px;font-size:13px;margin:6px 0}
+.critbox{border-left:3px solid var(--crit)}
+pre{background:#0a0a0a;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;max-height:420px;font:12px/1.5 var(--mono);color:var(--text-secondary);margin:0}
+.tabs{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap} .tabs button.on{border-color:var(--series-1);color:var(--series-1)}
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.calc label{font:11px var(--mono);color:var(--text-muted);display:flex;flex-direction:column;gap:4px}
+#err{display:none}
+a{color:var(--series-1)}
+</style>
+</head>
+<body>
+<header>
+  <h1>▌TERMINAL DE RIESGO · TREND TIMING</h1>
+  <div class="meta">
+    <span id="m-fecha">—</span><span id="m-modelo"></span><span id="m-gen"></span>
+    <label>Histórico <select id="hist"></select></label>
+  </div>
+</header>
+<div id="err" class="card critbox warnbox" style="margin:16px"></div>
+<main>
+  <div class="col">
+    <section class="card" id="mercado">
+      <h2>Estado de mercado</h2>
+      <div class="light">
+        <div class="bulbs" aria-hidden="true"><div class="bulb r"></div><div class="bulb y"></div><div class="bulb g"></div></div>
+        <div style="flex:1;min-width:0">
+          <div class="big" id="sem-txt">—</div>
+          <div class="sec mono" id="sem-reg"></div>
+          <div class="mono" style="margin-top:8px;font-size:12px">Exposición máxima <b id="exp-txt">—</b> <span class="muted" id="exp-tope"></span></div>
+          <div class="bar"><span id="exp-bar" style="width:0"></span></div>
+        </div>
+      </div>
+      <p id="mk-resumen" class="sec"></p>
+      <div id="mk-corr"></div>
+      <div class="scroll"><table id="idx"><thead><tr><th>Índice</th><th class="num">Precio</th><th class="num">vs SMA200</th><th class="num">5d</th><th class="num">20d</th><th class="num">RSI</th></tr></thead><tbody></tbody></table></div>
+      <details style="margin-top:10px"><summary class="mono sec">Drivers, riesgos y contra-tesis</summary><div id="mk-det"></div></details>
+    </section>
+    <section class="card">
+      <h2>Watchlist</h2>
+      <div class="scroll"><table id="watch"><thead><tr><th>Activo</th><th>Fase</th><th>Señal</th><th class="num">R:R</th><th class="num">Tamaño</th><th class="num">A/L/B %</th></tr></thead><tbody></tbody></table></div>
+      <div id="errores" class="muted mono" style="font-size:12px;margin-top:8px"></div>
+    </section>
+  </div>
+
+  <div class="col">
+    <section class="card">
+      <div class="det-head">
+        <div><span class="big" id="d-tk">—</span> <span class="mono sec" id="d-px"></span></div>
+        <div id="d-chips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+      <div id="chart" role="img" aria-label="Gráfico de precios con medias móviles y niveles"></div>
+      <div class="legend" id="lv-legend"></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card"><h2>Escenarios (suman 100%)</h2><div id="d-esc"></div><p class="muted" style="font-size:12px" id="d-conf"></p></section>
+      <section class="card"><h2>Plan de riesgo</h2><dl class="kv" id="d-plan"></dl></section>
+    </div>
+
+    <div class="grid2">
+      <section class="card"><h2>Timing</h2><div id="d-timing"></div></section>
+      <section class="card"><h2>Contra-tesis e invalidación</h2><div id="d-contra"></div></section>
+    </div>
+
+    <section class="card">
+      <h2>Calculadora de tamaño de posición</h2>
+      <div class="calc">
+        <label>Capital <input id="c-cap" type="number" value="100000" min="0" step="1000"></label>
+        <label>Riesgo por operación % <input id="c-risk" type="number" value="1" min="0.1" max="5" step="0.1"></label>
+        <label>Entrada <input id="c-ent" type="number" step="0.01"></label>
+        <label>Stop <input id="c-stop" type="number" step="0.01"></label>
+        <label>Objetivo <input id="c-tgt" type="number" step="0.01"></label>
+      </div>
+      <dl class="kv" id="c-out" style="margin-top:12px"></dl>
+    </section>
+
+    <section class="card"><h2>Noticias analizadas (24h)</h2><div id="d-news" class="sec"></div></section>
+
+    <section class="card">
+      <h2>Visor JSON</h2>
+      <div class="tabs"><button data-j="analisis" class="on">Análisis Claude</button><button data-j="motor">Motor determinista</button><button data-j="mercado">Mercado</button><button data-j="todo">Reporte</button><button id="copy">Copiar</button></div>
+      <pre id="json"></pre>
+    </section>
+  </div>
+</main>
+
+<script>
+/* ===== Configuración =====
+   Por defecto lee el JSON generado por el worker. Para Supabase, define window.APP_CONFIG antes de este script:
+   window.APP_CONFIG = { supabaseUrl: "https://xxx.supabase.co", supabaseAnonKey: "..." }  (con RLS y login, ver README) */
+const CFG = Object.assign({ dataUrl: "data/latest.json", histIndex: "data/history/index.json", histDir: "data/history/" }, window.APP_CONFIG || {});
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (v, d=2) => v == null || isNaN(v) ? "—" : Number(v).toLocaleString("es-MX", {minimumFractionDigits:d, maximumFractionDigits:d});
+const pct = (v, d=1) => v == null ? "—" : (v > 0 ? "+" : "") + fmt(v, d) + "%";
+
+const FASE = {
+  ACUMULACION:["◐","c-info","Acumulación"], TENDENCIA_ALCISTA_TEMPRANA:["▲","c-good","Alcista temprana"],
+  TENDENCIA_EXTENDIDA:["⚠","c-warn","Extendida"], DISTRIBUCION_O_BAJISTA:["▼","c-crit","Distribución/Bajista"],
+  TRANSICION_SIN_FASE_CLARA:["◇","c-mut","Transición"] };
+const SENAL = {
+  COMPRAR:["●","c-good","COMPRAR"], ESPERAR_SOPORTE:["◷","c-warn","ESPERAR SOPORTE"], ESPERAR_RUPTURA:["◷","c-info","ESPERAR RUPTURA"],
+  VENDER_TOMA_GANANCIAS:["◑","c-warn","TOMA GANANCIAS"], VENDER_CERRAR:["■","c-crit","VENDER/CERRAR"], NO_COMPRAR:["✕","c-mut","NO COMPRAR"] };
+const SEM = { VERDE_COMPRAR:["g","c-good","VERDE · COMPRAR"], AMARILLO_CAUTELA:["y","c-warn","AMARILLO · CAUTELA"], ROJO_NO_COMPRAR:["r","c-crit","ROJO · NO COMPRAR"] };
+const chip = (map, k) => { const [i,c,t] = map[k] || ["?","c-mut",k]; return `<span class="chip ${c}">${i} ${esc(t)}</span>`; };
+
+let REP = null, SEL = null, chart = null, jsonTab = "analisis";
+
+async function cargarJSON(url){ const r = await fetch(url, {cache:"no-store"}); if(!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); }
+
+async function cargarSupabase(fecha){
+  const h = { apikey: CFG.supabaseAnonKey, Authorization: `Bearer ${CFG.supabaseToken || CFG.supabaseAnonKey}` };
+  const base = `${CFG.supabaseUrl}/rest/v1/analisis_diario`;
+  if(!fecha){ const u = await (await fetch(`${base}?select=fecha&order=fecha.desc&limit=1`, {headers:h})).json(); fecha = u[0]?.fecha; }
+  const rows = await (await fetch(`${base}?select=*&fecha=eq.${encodeURIComponent(fecha)}`, {headers:h})).json();
+  const mk = rows.find(r => r.tipo === "MERCADO");
+  return { fecha, mercado: mk?.payload, activos: rows.filter(r => r.tipo === "ACTIVO").map(r => r.payload), errores: [], noticias_macro: [] };
+}
+
+async function cargar(fecha){
+  try{
+    REP = CFG.supabaseUrl ? await cargarSupabase(fecha) : await cargarJSON(fecha ? `${CFG.histDir}${fecha}.json` : CFG.dataUrl);
+    $("#err").style.display = "none";
+    render();
+  }catch(e){
+    $("#err").style.display = "block";
+    $("#err").innerHTML = `<b>No se pudieron cargar los datos.</b> ${esc(e.message)}<br><span class="muted">Ejecuta el worker: <code>python -m worker.run_daily</code> y sirve la carpeta <code>public/</code>.</span>`;
+  }
+}
+
+async function cargarHistorial(){
+  if(CFG.supabaseUrl) return;
+  try{
+    const fechas = (await cargarJSON(CFG.histIndex)).slice().reverse();
+    $("#hist").innerHTML = `<option value="">Último</option>` + fechas.map(f => `<option>${esc(f)}</option>`).join("");
+  }catch{ $("#hist").innerHTML = `<option value="">Último</option>`; }
+}
+$("#hist").onchange = e => cargar(e.target.value || null);
+
+function render(){
+  $("#m-fecha").textContent = `Cierre ${REP.fecha}`;
+  $("#m-modelo").textContent = REP.modelo ? `Modelo ${REP.modelo}` : "Modo determinista";
+  $("#m-gen").textContent = REP.generado_utc ? `Generado ${REP.generado_utc.replace("T"," ").slice(0,16)} UTC` : "";
+  renderMercado(); renderWatch();
+  const t = SEL && REP.activos.find(a => a.ticker === SEL) ? SEL : REP.activos[0]?.ticker;
+  if(t) seleccionar(t);
+  $("#errores").textContent = (REP.errores||[]).map(e => `${e.ticker}: ${e.error}`).join(" · ");
+}
+
+function renderMercado(){
+  const m = REP.mercado || {}; const d = m.datos || {};
+  const [b, , txt] = SEM[m.semaforo] || ["", "", "—"];
+  document.querySelectorAll(".bulb").forEach(x => x.classList.toggle("on", x.classList.contains(b)));
+  $("#sem-txt").innerHTML = chip(SEM, m.semaforo);
+  $("#sem-reg").textContent = `Régimen ${m.regimen || "—"} · Confianza ${m.confianza || "—"} · ${m.fuente || ""}`;
+  $("#exp-txt").textContent = `${m.exposicion_maxima_pct ?? "—"}%`;
+  $("#exp-tope").textContent = d.tope_exposicion_pct != null ? `(tope duro ${d.tope_exposicion_pct}%)` : "";
+  $("#exp-bar").style.width = `${m.exposicion_maxima_pct || 0}%`;
+  $("#mk-resumen").textContent = m.resumen || "";
+  $("#mk-corr").innerHTML = [...(m.correcciones_guardrail||[]), ...(d.razones_tope||[])].map(c => `<div class="warnbox">⚠ ${esc(c)}</div>`).join("")
+    + (m.error_llm ? `<div class="warnbox critbox">LLM no disponible: ${esc(m.error_llm)}</div>` : "");
+  $("#idx tbody").innerHTML = Object.entries(d.indices || {}).map(([t, r]) => `<tr><td>${esc(t)}</td><td class="num">${fmt(r.precio)}</td>
+    <td class="num">${pct(r["dist_sma200_%"])}</td><td class="num">${pct(r["ret_5d_%"])}</td><td class="num">${pct(r["ret_20d_%"])}</td><td class="num">${fmt(r.rsi14,1)}</td></tr>`).join("")
+    + (d["amplitud_sobre_sma50_%"] != null ? `<tr><td class="muted">Amplitud &gt; SMA50</td><td class="num" colspan="5">${fmt(d["amplitud_sobre_sma50_%"],1)}%</td></tr>` : "");
+  const imp = {POSITIVO:"▲",NEGATIVO:"▼",NEUTRAL:"◇"};
+  const nm = Object.fromEntries((REP.noticias_macro||[]).map(n => [n.id, n]));
+  $("#mk-det").innerHTML = `
+    <ul class="tight">${(m.drivers||[]).map(x => `<li>${imp[x.impacto]||""} <b>${esc(x.factor)}</b>: ${esc(x.lectura)} <span class="muted">[${esc(x.dato_citado)}]</span></li>`).join("")}</ul>
+    ${(m.noticias_clave||[]).length ? `<b class="mono">Noticias clave</b><ul class="tight">${m.noticias_clave.map(n => `<li>${imp[n.impacto]||""} ${nm[n.news_id] ? `<a href="${esc(nm[n.news_id].url)}" target="_blank" rel="noopener noreferrer">${esc(nm[n.news_id].titulo)}</a>` : esc(n.news_id)} — ${esc(n.por_que_importa)}</li>`).join("")}</ul>` : ""}
+    ${(m.riesgos_macro||[]).length ? `<b class="mono">Riesgos macro</b><ul class="tight">${m.riesgos_macro.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    <div class="warnbox"><b>Contra-tesis:</b> ${esc(m.contra_tesis)}</div>
+    ${(m.que_cambiaria_la_lectura||[]).length ? `<b class="mono">Qué cambiaría la lectura</b><ul class="tight">${m.que_cambiaria_la_lectura.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+    ${(m.datos_faltantes||[]).length ? `<p class="muted">Datos faltantes: ${esc(m.datos_faltantes.join(", "))}</p>` : ""}`;
+}
+
+function renderWatch(){
+  $("#watch tbody").innerHTML = REP.activos.map(a => {
+    const x = a.analisis, e = x.escenarios || {};
+    return `<tr data-t="${esc(a.ticker)}"><td><b>${esc(a.ticker)}</b><br><span class="muted">${fmt(a.niveles.precio)}</span></td>
+      <td>${chip(FASE, x.fase)}</td><td>${chip(SENAL, x.senal)}</td>
+      <td class="num">${a.motor.rr != null ? "1:" + fmt(a.motor.rr) : "—"}</td>
+      <td class="num">${fmt(x.tamano_posicion_final_pct,1)}%</td>
+      <td class="num">${[e.alcista,e.lateral,e.bajista].map(s => s?.probabilidad ?? "—").join("/")}</td></tr>`;
+  }).join("");
+  document.querySelectorAll("#watch tbody tr").forEach(tr => tr.onclick = () => seleccionar(tr.dataset.t));
+}
+
+function seleccionar(t){
+  SEL = t;
+  const a = REP.activos.find(x => x.ticker === t); if(!a) return;
+  document.querySelectorAll("#watch tbody tr").forEach(tr => tr.classList.toggle("sel", tr.dataset.t === t));
+  const x = a.analisis, m = a.motor, n = a.niveles;
+  $("#d-tk").textContent = t;
+  $("#d-px").textContent = `${fmt(n.precio)} · ATR14 ${fmt(m.indicadores.ATR14)} (${fmt(m.indicadores["ATR%"])}%) · RSI ${fmt(m.indicadores.RSI14,1)}`;
+  $("#d-chips").innerHTML = chip(FASE, x.fase) + chip(SENAL, x.senal)
+    + (x.coincide_con_motor === false ? `<span class="chip c-warn">≠ motor: ${esc(m.fase)}</span>` : "")
+    + `<span class="chip c-mut">${esc(x.fuente || "")}</span>`;
+  renderChart(a);
+
+  const colEsc = {alcista:"var(--series-1)", lateral:"var(--text-muted)", bajista:"var(--series-2)"};
+  $("#d-esc").innerHTML = ["alcista","lateral","bajista"].map(k => { const s = x.escenarios[k];
+    return `<div class="esc"><span>${k[0].toUpperCase()+k.slice(1)}</span><div class="track" title="${esc(s.tesis)}"><div class="fill" style="width:${s.probabilidad}%;background:${colEsc[k]}"></div></div><b style="text-align:right">${s.probabilidad}%</b></div>
+      <div class="muted" style="font-size:12px;margin:-4px 0 8px 88px">${esc(s.nivel_ref)} ${fmt(s.nivel)} — ${esc(s.tesis)}</div>`; }).join("");
+  $("#d-conf").textContent = `Confianza ${x.confianza} · Horizonte ${x.horizonte}` + (x.discrepancia_fase ? ` · ${x.discrepancia_fase}` : "");
+
+  const rows = [["Fase motor", m.fase], ["Orden motor", m.orden], ["Entrada", fmt(m.entrada)], ["Soporte estructural", fmt(m.soporte)],
+    ["Stop Loss (" + m.indicadores.Mult_ATR_stop + "×ATR)", fmt(m.stop_loss)], ["Distancia al stop", fmt(m.distancia_stop_pct) + "%"],
+    ["Objetivo 1 (50%)", fmt(m.resistencia_1)], ["Objetivo 2", fmt(m.objetivo_2)], ["R:R a objetivo 1", m.rr != null ? "1:" + fmt(m.rr) : "—"],
+    ["Trailing stop", fmt(m.trailing_stop)], ["Tamaño motor (1%/dist)", fmt(m.tamano_posicion_pct) + "%"],
+    ["Tamaño final", fmt(x.tamano_posicion_final_pct) + "%"]];
+  $("#d-plan").innerHTML = rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")
+    + `<dt>Cálculo</dt><dd class="muted" style="white-space:normal;font-size:11px">${esc(x.tamano_calculo)}</dd>`;
+
+  $("#d-timing").innerHTML = `<p><b class="c-good">Gatillo compra</b><br>${esc(x.gatillo_compra)}</p>
+    <p><b class="c-crit">Gatillo venta / salida</b><br>${esc(x.gatillo_venta)}</p>
+    <p><b class="c-warn">Invalidación temporal · ${esc(x.invalidacion_temporal_sesiones)} sesiones</b><br>${esc(x.invalidacion_temporal_texto)}</p>`;
+  $("#d-contra").innerHTML = `<div class="warnbox">${esc(x.contra_tesis)}</div>
+    <ul class="tight">${(x.riesgos_invalidacion||[]).map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+    ${(x.correcciones_guardrail||[]).map(c => `<div class="warnbox critbox">🛡 Guardrail: ${esc(c)}</div>`).join("")}
+    ${(m.alertas||[]).map(c => `<div class="warnbox">Motor: ${esc(c)}</div>`).join("")}
+    ${x.error_llm ? `<div class="warnbox critbox">LLM: ${esc(x.error_llm)}</div>` : ""}
+    ${(x.datos_faltantes||[]).length ? `<p class="muted">Datos faltantes: ${esc(x.datos_faltantes.join(", "))}</p>` : ""}`;
+
+  const rel = Object.fromEntries((x.noticias_relevantes||[]).map(r => [r.news_id, r]));
+  $("#d-news").innerHTML = (a.noticias||[]).length ? `<p class="mono">Sentimiento ${fmt(x.sentimiento_noticias)} · ajuste tamaño ${esc(x.ajuste_tamano)} — ${esc(x.razon_ajuste)}</p><ul class="tight">`
+    + a.noticias.map(nn => { const r = rel[nn.id];
+      return `<li>${r ? chip({[r.sentimiento]:[{POSITIVO:"▲",NEGATIVO:"▼",NEUTRAL:"◇"}[r.sentimiento], {POSITIVO:"c-good",NEGATIVO:"c-crit",NEUTRAL:"c-mut"}[r.sentimiento], r.sentimiento]}, r.sentimiento) : ""}
+        <a href="${esc(nn.url)}" target="_blank" rel="noopener noreferrer">${esc(nn.titulo)}</a> <span class="muted">${esc(nn.fuente)} · ${esc((nn.fecha||"").slice(0,16))}</span>${r ? `<br><span class="muted">${esc(r.impacto)}</span>` : ""}</li>`; }).join("") + "</ul>"
+    : `<p class="muted">Sin noticias en la ventana de 24h.</p>`;
+
+  $("#c-ent").value = m.entrada ?? ""; $("#c-stop").value = m.stop_loss ?? ""; $("#c-tgt").value = m.resistencia_1 ?? "";
+  calc(); renderJSON();
+}
+
+function calc(){
+  const cap = +$("#c-cap").value, r = +$("#c-risk").value / 100, e = +$("#c-ent").value, s = +$("#c-stop").value, t = +$("#c-tgt").value;
+  const a = REP?.activos.find(x => x.ticker === SEL);
+  const out = [];
+  if(e > 0 && s > 0 && e > s){
+    const riesgoUnit = e - s, distPct = riesgoUnit / e;
+    let unidades = (cap * r) / riesgoUnit, nocional = unidades * e;
+    const tope = a ? a.analisis.tamano_posicion_final_pct : null;
+    const sizePct = nocional / cap * 100;
+    out.push(["Distancia al stop", fmt(distPct*100) + "%"], ["Riesgo monetario", "$" + fmt(cap*r)],
+      ["Unidades (sin tope)", fmt(unidades, unidades < 10 ? 4 : 0)], ["Nocional (sin tope)", "$" + fmt(nocional) + ` (${fmt(sizePct,1)}% capital)`]);
+    if(tope != null && a.analisis.senal !== "COMPRAR"){
+      out.push(["Plan del día", `<span class="c-warn">Señal ${esc(a.analisis.senal)}: el plan no autoriza abrir posición (tamaño 0%).</span>`]);
+    } else if(tope != null){
+      const nocTope = Math.min(nocional, cap * tope / 100);
+      out.push(["Nocional con tope del plan (" + fmt(tope,1) + "%)", "$" + fmt(nocTope)], ["Unidades con tope", fmt(nocTope / e, nocTope/e < 10 ? 4 : 0)]);
+    }
+    if(t > e){ const rr = (t - e) / riesgoUnit; out.push(["R:R", `<span class="${rr >= 2 ? "c-good" : "c-crit"}">1:${fmt(rr)} ${rr >= 2 ? "✓" : "✕ < 1:2"}</span>`]); }
+  } else out.push(["", `<span class="muted">La entrada debe ser mayor que el stop (posición larga).</span>`]);
+  $("#c-out").innerHTML = out.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("");
+}
+["#c-cap","#c-risk","#c-ent","#c-stop","#c-tgt"].forEach(id => $(id).addEventListener("input", calc));
+
+function renderJSON(){
+  const a = REP.activos.find(x => x.ticker === SEL);
+  const obj = jsonTab === "analisis" ? a?.analisis : jsonTab === "motor" ? a?.motor : jsonTab === "mercado" ? REP.mercado
+    : {...REP, activos: REP.activos.map(x => ({...x, serie: `[${x.serie?.length || 0} velas]`}))};
+  $("#json").textContent = JSON.stringify(obj, null, 2);
+}
+document.querySelectorAll(".tabs button[data-j]").forEach(b => b.onclick = () => {
+  jsonTab = b.dataset.j; document.querySelectorAll(".tabs button[data-j]").forEach(x => x.classList.toggle("on", x === b)); renderJSON(); });
+$("#copy").onclick = () => navigator.clipboard?.writeText($("#json").textContent);
+
+/* ===== Gráfico ===== */
+const MAS = [["sma20","SMA 20","--series-1"],["ema21","EMA 21","--series-4"],["sma50","SMA 50","--series-2"],["sma200","SMA 200","--series-3"]];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function renderChart(a){
+  const el = $("#chart"); el.innerHTML = "";
+  if(chart){ chart.remove(); chart = null; }
+  if(!window.LightweightCharts){ el.textContent = "No se pudo cargar la librería de gráficos."; return; }
+  chart = LightweightCharts.createChart(el, {
+    autoSize: true, layout: { background: { color: css("--surface-1") }, textColor: css("--text-secondary"), fontFamily: "JetBrains Mono" },
+    grid: { vertLines: { color: "#1f2022" }, horzLines: { color: "#1f2022" } },
+    rightPriceScale: { borderColor: css("--line") }, timeScale: { borderColor: css("--line") },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
+  const velas = chart.addCandlestickSeries({ upColor: css("--up"), downColor: css("--down"), borderVisible: false,
+    wickUpColor: css("--up"), wickDownColor: css("--down") });
+  velas.setData(a.serie.map(p => ({ time: p.t, open: p.o, high: p.h, low: p.l, close: p.c })));
+  const lines = {};
+  MAS.forEach(([k, name, col]) => {
+    lines[k] = chart.addLineSeries({ color: css(col), lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    lines[k].setData(a.serie.filter(p => p[k] != null).map(p => ({ time: p.t, value: p[k] })));
+  });
+  const m = a.motor, LS = LightweightCharts.LineStyle;
+  const niveles = [
+    ["Entrada", m.entrada, css("--series-1"), LS.Solid], ["Soporte", m.soporte, css("--text-muted"), LS.Dotted],
+    ["Stop ATR", m.stop_loss, css("--crit"), LS.Dashed], ["Objetivo 1", m.resistencia_1, css("--good"), LS.Dashed],
+    ["Objetivo 2", m.objetivo_2, css("--good"), LS.Dotted], ["Trailing", m.trailing_stop, css("--warn"), LS.Dotted] ];
+  niveles.forEach(([t, p, c, s]) => p != null && velas.createPriceLine({ price: p, color: c, lineWidth: 1, lineStyle: s, axisLabelVisible: true, title: t }));
+  chart.timeScale().fitContent();
+
+  const leyendaBase = MAS.map(([k, name, col]) => `<span><i style="background:${css(col)}"></i>${name}</span>`).join("");
+  const setLegend = p => { $("#legend").innerHTML = leyendaBase + (p ? `<span class="mono" style="color:var(--text-primary)">${p.t} O ${fmt(p.o)} H ${fmt(p.h)} L ${fmt(p.l)} C ${fmt(p.c)} · Vol ${fmt(p.v,0)}</span>` : ""); };
+  const byT = Object.fromEntries(a.serie.map(p => [p.t, p]));
+  setLegend(a.serie.at(-1));
+  chart.subscribeCrosshairMove(e => setLegend(e.time ? byT[typeof e.time === "string" ? e.time : `${e.time.year}-${String(e.time.month).padStart(2,"0")}-${String(e.time.day).padStart(2,"0")}`] : a.serie.at(-1)));
+  $("#lv-legend").innerHTML = niveles.filter(n => n[1] != null).map(([t, p, c, s]) =>
+    `<span><i style="background:${c};${s !== LS.Solid ? "height:0;border-top:2px dashed " + c : ""}"></i>${t} ${fmt(p)}</span>`).join("");
+}
+
+cargarHistorial(); cargar(null);
+</script>
+</body>
+</html>
