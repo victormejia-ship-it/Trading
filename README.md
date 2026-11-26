@@ -25,9 +25,48 @@ la última palabra.
  public/index.html                                  semáforo, watchlist, gráfico, escenarios, calculadora, JSON
 ```
 
+## Terminal en vivo (web propia en Vercel, plan gratuito)
+
+`public/index.html` + `api/*.js` + `lib/*.js` forman una web con precios en vivo:
+
+| Dato | Fuente gratuita | Frescura |
+|---|---|---|
+| Acciones/ETFs de EE. UU. (SIC) | Finnhub `quote` (con `FINNHUB_API_KEY`) | Tiempo real |
+| Emisoras BMV (`.MX`), IPC (`^MXX`), VIX, dólar (`MXN=X`) | Yahoo Finance (sin clave, no oficial) | ~15-20 min de retraso en BMV |
+| Históricos diarios (2 años) | Yahoo Finance | La vela de hoy se actualiza durante la sesión |
+| Noticias | Finnhub (EE. UU. y macro) + Yahoo (BMV) | Últimas 24 h |
+
+Cada precio muestra si está en vivo, con cuántos minutos de retraso o al cierre. La watchlist se actualiza cada 15 s con el mercado abierto. Hay alertas en pantalla, por notificación del navegador y con sonido cuando el precio toca la zona de entrada, el stop, el objetivo 1, la ruptura o el trailing. La calculadora da títulos y monto en MXN (el SIC se convierte con `MXN=X`).
+
+### Desplegar (una vez)
+1. **Finnhub**: crea una cuenta gratuita en finnhub.io y copia tu API key.
+2. **Claude (opcional)**: crea una API key en console.anthropic.com. Sin ella funciona «Analizar (motor)», que es gratis.
+3. **Vercel**: *Add New → Project → Import* este repo. Framework preset: **Other**. `vercel.json` ya fija `public/` como salida y 60 s por función.
+   Variables de entorno:
+   - `APP_TOKEN`: contraseña larga inventada por ti. Protege la app y tus créditos.
+   - `FINNHUB_API_KEY`
+   - `ANTHROPIC_API_KEY` (opcional)
+   - Opcional: `CLAUDE_MODEL` (por defecto `claude-opus-5-5`) y `CLAUDE_EFFORT` (por defecto `medium`).
+4. En *Settings → Git*, define la rama de producción (la de este trabajo o `main` tras fusionar). Cada commit del worker diario redespliega con el reporte nuevo.
+5. Abre la URL, escribe tu `APP_TOKEN` y en *Configuración* revisa que Claude y Finnhub aparezcan como configurados.
+
+No pude consultar la documentación de Vercel desde el entorno de desarrollo: si el panel de Vercel te pide otro directorio de salida, usa `public`.
+
+### Costo orientativo de Claude por API
+Un análisis completo es 1 llamada de mercado + 1 por activo. Con 8 activos y `claude-opus-5-5` son ~0.8 USD (estimado; revisa tu consumo en la consola). Para bajarlo: `CLAUDE_MODEL=claude-sonnet-5-5` (~la mitad), menos activos, o el análisis con Claude desde la página de claude.ai (lo cubre tu plan).
+
+### Probar en tu computadora
+```bash
+npm install
+```
+```bash
+APP_TOKEN=prueba FINNHUB_API_KEY=... ANTHROPIC_API_KEY=... node scripts/dev-server.js
+```
+Abre http://localhost:3000. Pruebas: `npm test` (servidor) y `python -m pytest -q tests` (motor Python).
+
 ## Versión web en claude.ai (como tus otros proyectos)
 
-`web/index.html` + `web/engine.js` se publican como página de claude.ai:
+`web/index.html` + `public/engine.js` se publican como página de claude.ai:
 https://claude.ai/artifact/LZSrR67PKiE26iqqR9mtz5
 
 - **Motor determinista en el navegador** (`web/engine.js`): da los mismos resultados que `trend_risk/`, comprobado con 16 series de prueba.

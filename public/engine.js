@@ -215,7 +215,7 @@
         "ret_5d_%": rnd((c / last(e.c, 6) - 1) * 100), "ret_20d_%": rnd((c / last(e.c, 21) - 1) * 100),
         "atr_%": rnd((last(e.atr14) / c) * 100), macd_hist: rnd(last(e.macd_hist), 4) };
     }
-    const univ = [...activos, ...indices].filter((t) => series[t] && series[t].c.length >= 220 && t !== "^VIX" && t !== "VIX");
+    const univ = [...activos, ...indices].filter((t) => series[t] && series[t].c.length >= 220 && !t.startsWith("^") && !t.includes("=") && t !== "VIX");
     const sobre = univ.map((t) => { const e = enrich(series[t]); return last(e.c) > last(e.sma50); });
     const amplitud = sobre.length ? rnd((100 * sobre.filter(Boolean).length) / sobre.length, 1) : null;
     let tope = 100; const razones = [];

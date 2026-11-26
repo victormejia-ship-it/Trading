@@ -78,7 +78,7 @@ def snapshot_mercado(precios: dict[str, pd.DataFrame], indices: list[str], activ
             "atr_%": _num(l.atr14 / l.close * 100),
             "macd_hist": _num(l.macd_hist, 4),
         }
-    univ = [t for t in activos + indices if t in precios and t != "^VIX"]
+    univ = [t for t in activos + indices if t in precios and not t.startswith("^") and "=" not in t]
     sobre50 = [bool(enrich(precios[t]).iloc[-1].pipe(lambda r: r.close > r.sma50)) for t in univ]
     amplitud = round(100 * sum(sobre50) / len(sobre50), 1) if sobre50 else None
 

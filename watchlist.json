@@ -1,6 +1,24 @@
 {
-  "indices": ["SPY", "QQQ", "IWM", "DIA", "^VIX", "TLT", "GLD", "HYG"],
-  "activos": ["AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "BTC-USD"],
+  "indices": [
+    "SPY",
+    "QQQ",
+    "IWM",
+    "^VIX",
+    "^MXX",
+    "MXN=X",
+    "TLT",
+    "HYG"
+  ],
+  "activos": [
+    "AAPL",
+    "MSFT",
+    "NVDA",
+    "AMZN",
+    "WALMEX.MX",
+    "GFNORTEO.MX",
+    "AMXB.MX",
+    "FEMSAUBD.MX"
+  ],
   "riesgo_por_operacion_pct": 1.0,
   "max_posicion_pct": 25,
   "historial_dias_grafico": 260,
