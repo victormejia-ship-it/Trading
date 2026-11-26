@@ -1,0 +1,34 @@
+name: Pruebas
+
+# Cada cambio de código corre las pruebas de Python, Node, paridad del motor y contratos de datos.
+on:
+  push:
+    paths-ignore:
+      - "public/data/**"
+      - "data/**"
+      - "reports/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: pip install -r requirements.txt
+      - run: npm install --no-audit --no-fund
+      - run: python -m pytest -q tests
+      - run: npm test
+      - name: Sintaxis de la página
+        run: node -e "new Function(require('fs').readFileSync('public/app.js','utf8'))"

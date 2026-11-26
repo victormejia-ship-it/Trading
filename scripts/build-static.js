@@ -32,6 +32,27 @@ function copiar(src, dst) {
 
 const r4 = (a) => a.map((x) => Math.round(x * 1e4) / 1e4);
 
+// Control de calidad: lo que la página y los avisos necesitan para confiar en los datos.
+function controlCalidad(syms, cot, series, generado) {
+  const problemas = [], ahora = Date.now();
+  for (const s of syms) {
+    const q = cot[s], h = series[s];
+    if (!q) problemas.push({ simbolo: s, tipo: "sin_cotizacion" });
+    else if (!(q.price > 0)) problemas.push({ simbolo: s, tipo: "precio_invalido" });
+    if (!h) { problemas.push({ simbolo: s, tipo: "sin_historico" }); continue; }
+    if (h.c.length < 260) problemas.push({ simbolo: s, tipo: "historia_corta", velas: h.c.length });
+    const dias = (ahora - Date.parse(h.t[h.t.length - 1] + "T21:00:00Z")) / 864e5;
+    if (dias > 5) problemas.push({ simbolo: s, tipo: "historico_viejo", ultima: h.t[h.t.length - 1] });
+    for (let i = Math.max(1, h.c.length - 30); i < h.c.length; i++) {
+      const salto = Math.abs(h.c[i] / h.c[i - 1] - 1);
+      if (salto > 0.25 && !s.startsWith("^")) { problemas.push({ simbolo: s, tipo: "salto_sospechoso", fecha: h.t[i], pct: Math.round(salto * 1000) / 10 }); break; }
+    }
+  }
+  const criticos = ["SPY", "MXN=X"].filter((s) => !cot[s] || !series[s]);
+  return { generado, simbolos: syms.length, cotizaciones: Object.keys(cot).length, historicos: Object.keys(series).length,
+    problemas, critico: criticos.length > 0, criticos, ok: problemas.length === 0 };
+}
+
 async function main() {
   fs.rmSync(SALIDA, { recursive: true, force: true });
   copiar(path.join(RAIZ, "public"), SALIDA);
@@ -46,13 +67,16 @@ async function main() {
   }
   const generado = new Date().toISOString();
   fs.mkdirSync(path.join(SALIDA, "data"), { recursive: true });
+  fs.writeFileSync(path.join(SALIDA, "data/estado.json"), JSON.stringify(controlCalidad(syms, cotizaciones, series, generado)));
   fs.writeFileSync(path.join(SALIDA, "data/vivo.json"), JSON.stringify({ generado, cotizaciones, errores }));
   fs.writeFileSync(path.join(SALIDA, "data/series.json"), JSON.stringify({ generado, series, errores: errSeries }));
   fs.writeFileSync(path.join(SALIDA, ".nojekyll"), "");
   console.log(`Sitio en ${SALIDA}: ${Object.keys(cotizaciones).length}/${syms.length} cotizaciones, ${Object.keys(series).length} series.`);
   if (Object.keys(errores).length) console.log("Sin cotización:", errores);
   if (Object.keys(errSeries).length) console.log("Sin histórico:", errSeries);
-  if (!series.SPY) { console.error("Sin datos de SPY: no se publica."); process.exit(1); }
+  const est = JSON.parse(fs.readFileSync(path.join(SALIDA, "data/estado.json"), "utf8"));
+  if (est.problemas.length) console.log("Control de calidad:", JSON.stringify(est.problemas));
+  if (est.critico) { console.error("Faltan datos críticos (" + est.criticos.join(", ") + "): no se publica."); process.exit(1); }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

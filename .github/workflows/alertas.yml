@@ -39,3 +39,10 @@ jobs:
           if [ "${{ inputs.modo }}" = "prueba" ]; then node scripts/senales.js --prueba;
           elif [ "${{ inputs.modo }}" = "forzar" ]; then node scripts/senales.js --forzar;
           else node scripts/senales.js; fi
+      - name: Avisar si algo falló
+        if: failure()
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          [ -n "$NTFY_TOPIC" ] && curl -s -H "Title: Fallo en ${{ github.workflow }}" -H "Priority: high" -H "Tags: warning" \
+            -d "Revisa https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" "https://ntfy.sh/$NTFY_TOPIC" || true
