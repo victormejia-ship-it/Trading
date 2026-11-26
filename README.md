@@ -55,6 +55,41 @@ Todo en MXN, costos GBM incluidos y efectivo en CETES (`backtest/cartera_nucleo.
   El segundo comando genera `public/data/estrategia.json`.
 - **Tasas:** FRED no respondió desde GitHub, así que el rendimiento del efectivo usa promedios anuales aproximados de CETES (`data/tasas_cetes_anual_aprox.csv`).
 
+## Plan de inversión (lo primero que muestra la web)
+
+Cinco caminos con reglas simples, evidencia de 20 años y montos según tu capital y tu perfil (conservador, moderado o agresivo):
+
+| Camino | Regla | 2016-2026 con regla / sin regla |
+|---|---|---|
+| CETES | Colchón y refugio del dinero en pausa | ~7.4% al año, sin caídas |
+| S&P 500 (SPY/IVV/VOO en el SIC) | Filtro mensual de 200 días | 11.4% / 15.4%, caída −24% / −29% |
+| Nasdaq 100 (QQQ) | Filtro mensual de 200 días | 19.2% / 19.6%, caída −18% / −41% |
+| IPC (NAFTRAC) | Filtro mensual de 200 días | 3.9% / 6.8% (rindió menos que CETES) |
+| Russell 2000 (IWM) | Filtro mensual de 200 días | 13.3% / 11.1%, caída −20% / −39% |
+
+**Perfiles, 20 años con reglas:**
+
+| Perfil | Rendimiento anual | Peor caída |
+|---|---|---|
+| Conservador | 10.0% | −12% |
+| Moderado | 11.4% | −16% |
+| Agresivo | 12.4% | −16% |
+
+Los pesos se fijaron por diversificación, no se optimizaron con los datos.
+
+**Descartados tras probarlos:** RSI(2) en ETFs (rinde menos que CETES), bonos largos de EE. UU., swing por emisora y 17 patrones de velas.
+
+**Para regenerar el plan:**
+```bash
+python -m backtest.plan
+```
+```bash
+python -c "from backtest.plan import carteras; carteras()"
+```
+```bash
+python -m backtest.publicar_plan
+```
+
 ## Publicar en Firebase (recomendado si ya usas Firebase)
 
 - **Página:** Firebase Hosting sirve `public/`.

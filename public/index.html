@@ -84,6 +84,27 @@ code{font:13px var(--mono);background:var(--s2);padding:1px 4px;border-radius:3p
 #dlgSenal .accion{font:700 26px/1.1 var(--mono);margin:4px 0 2px}
 #dlgSenal .grid{display:grid;grid-template-columns:auto auto;gap:4px 16px;font:13.5px var(--mono);margin:10px 0}
 #dlgSenal .grid dd{margin:0;text-align:right}
+.plan{padding-block:22px 8px}
+.planHead{display:flex;flex-wrap:wrap;justify-content:space-between;gap:14px;align-items:flex-end}
+.planTit{font:700 32px/1.05 var(--sans);letter-spacing:-.02em;margin:0}
+.lead{font-size:17px;line-height:1.5;color:var(--ink2);max-width:72ch;margin:8px 0 0}
+.planCtl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.seg{display:flex;gap:0}.seg button{border-radius:0;min-width:7.5em}.seg button:first-child{border-radius:6px 0 0 6px}.seg button:last-child{border-radius:0 6px 6px 0}
+.seg button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.aviso{margin:16px 0 14px;padding:12px 14px;border-radius:8px;background:color-mix(in srgb,var(--warn) 14%,var(--s1));border:1px solid color-mix(in srgb,var(--warn) 45%,var(--line));font-size:15.5px}
+.procesos{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,225px),1fr));gap:12px}
+.proc{background:var(--s1);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.proc.k-g{border-left-color:var(--up)}.proc.k-y{border-left-color:var(--warn)}.proc.k-r{border-left-color:var(--dn)}.proc.k-n{border-left-color:var(--mut)}.proc.k-b{border-left-color:var(--acc)}
+.proc .tags{display:flex;justify-content:space-between;gap:6px;font:600 12px var(--mono);color:var(--mut)}
+.proc h3{margin:0;font:700 20px/1.15 var(--sans)}
+.accion{font:700 25px/1.05 var(--mono);letter-spacing:-.01em}
+.monto{font:600 15px var(--mono)}
+.que{font-size:15px;margin:2px 0}
+.reglas{font-size:14px;color:var(--ink2);margin:2px 0;border-top:1px solid var(--line);padding-top:8px}
+.reglas b{color:var(--ink)}
+.proc details summary{cursor:pointer;font-size:13.5px;color:var(--acc)}
+.espera{font-size:15.5px;margin:14px 0 6px}
+.avzSum{cursor:pointer;font:600 16px var(--sans);padding-block:16px;list-style:revert;border-top:1px solid var(--line)}
 footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 </style>
 </head>
@@ -106,6 +127,28 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 <div class="wrap" id="progBox" hidden><div class="card" style="margin-top:16px"><h2 id="progTit">Analizando…</h2><div class="prog" id="prog"></div></div></div>
 <div class="wrap" id="errBox" hidden><div class="note crit" id="err" style="margin-top:16px"></div></div>
 
+<section class="wrap plan" id="plan">
+  <div class="planHead">
+    <div>
+      <h2 class="planTit">Tu plan de inversión</h2>
+      <p class="lead" id="planResumen">Cargando el plan…</p>
+    </div>
+    <div class="planCtl">
+      <label class="f">Tu capital (MXN)<input id="pCap" type="number" min="0" step="1000" value="100000" style="width:10em"></label>
+      <div><div class="mono small mut" style="margin-bottom:4px">Tu perfil</div>
+        <div class="seg" id="pPerfil"><button data-p="conservador">Conservador</button><button data-p="moderado" class="on">Moderado</button><button data-p="agresivo">Agresivo</button></div></div>
+    </div>
+  </div>
+  <div class="aviso" id="planAviso"></div>
+  <div class="procesos" id="procesos"></div>
+  <p class="espera" id="planEspera"></p>
+  <details style="margin-top:6px"><summary class="mono small">Probado durante 20 años y descartado</summary><ul class="t" id="descartados"></ul></details>
+  <p class="small mut" id="planNota"></p>
+</section>
+
+<details id="avanzado">
+<summary class="wrap avzSum">Terminal avanzada: mercado, watchlist, gráficos, velas y laboratorio</summary>
+<div class="wrap acts" id="avzBar" style="padding-top:8px"></div>
 <main class="wrap">
   <div class="col">
     <section class="card" id="estrategia">
@@ -191,6 +234,7 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
     </div>
   </div>
 </main>
+</details>
 <footer class="wrap">Herramienta de análisis, no asesoría de inversión. Las probabilidades no están calibradas con resultados históricos; las órdenes se ejecutan manualmente en GBM+. Precios BMV con ~15-20 min de retraso; EE. UU. en tiempo real con Finnhub.</footer>
 
 <dialog id="dlgSenal" aria-labelledby="sgTit">
@@ -325,7 +369,7 @@ function mercadoAbierto() {
 
 // ---------------- cotizaciones en vivo
 const todos = () => [...new Set([...S.cfg.indices, ...S.cfg.activos, ...simbolosEstrategia()])];
-const simbolosEstrategia = () => (S.evid ? [...Object.values(S.evid.mangas).map((m) => m.simbolo), "MXN=X"] : []);
+const simbolosEstrategia = () => [...(S.evid ? [...Object.values(S.evid.mangas).map((m) => m.simbolo), "MXN=X"] : []), ...simbolosPlan()];
 let pollTimer = null;
 async function refrescar() {
   clearTimeout(pollTimer);
@@ -337,7 +381,7 @@ async function refrescar() {
       S.q = { ...S.q, ...j.cotizaciones };
       const pub = S.estatico && S.generadoEstatico ? ` · publicados por GitHub hace ${Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000))} min (se actualizan cada ~10 min en sesión)` : "";
       $("#actTxt").textContent = "Precios " + new Date().toLocaleTimeString("es-MX") + pub + (Object.keys(j.errores || {}).length ? ` · sin datos: ${Object.keys(j.errores).join(", ")}` : "");
-      pintarVivo(); revisarAlertas(); evaluarEstrategia();
+      pintarVivo(); revisarAlertas(); evaluarEstrategia(); evaluarPlan();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
   pollTimer = setTimeout(refrescar, (abierto ? (S.estatico ? 60 : S.cfg.poll) : 300) * 1000);
@@ -652,8 +696,11 @@ function serieConVivo(sym) {
   const n = s.t.length; if (s.t[n - 1] !== dia) return s;        // nunca se inventa una vela
   const c = [...s.c]; c[n - 1] = q.price; return { ...s, c };
 }
-const capital = () => +$("#kCap").value || ls.get("tr_cap", 100000);
-function montoManga(nombre) { return capital() * (S.evid?.recomendada.pesos[nombre] ?? 0); }
+const capital = () => +$("#pCap").value || ls.get("tr_cap", 100000);
+function montoManga(nombre) {
+  if (S.plan) { const pr = S.plan.procesos.find((x) => x.nombre === nombre); if (pr) return capital() * (S.plan.perfiles[S.perfil].pesos[pr.id] ?? 0); }
+  return capital() * (S.evid?.recomendada.pesos[nombre] ?? 0);
+}
 function titulos(nombre, m, r) { const fx = m.simbolo.endsWith(".MX") ? 1 : S.q["MXN=X"]?.price; const px = S.q[m.simbolo]?.price ?? r.precio; return fx ? Math.floor(montoManga(nombre) / (px * fx)) : null; }
 function evaluarEstrategia() {
   if (!S.evid) return;
@@ -665,6 +712,7 @@ function evaluarEstrategia() {
     if (r.senal !== "MANTENER" && r.hoy_decide) tipo = abierto ? "preliminar" : "confirmada";
     else if (r.hoy_decide && abierto && Math.abs(r.distancia_pct) < 1.5) tipo = "cerca";
     if (tipo && !S.q[m.simbolo]) tipo = null;     // esperar el primer precio en vivo antes de avisar
+    if (S.plan) tipo = null;                       // con plan cargado, los avisos los emite evaluarPlan()
     if (tipo) { const k = `${r.fecha}|${nombre}|${tipo}|${r.senal}`; if (!S.senales[k]) { S.senales[k] = Date.now(); ls.set("tr_senales", S.senales); S.colaModal.push({ nombre, m, r, tipo }); } }
   }
   pintarEstrategia(); siguienteModal();
@@ -765,6 +813,107 @@ function pintarEscHist(t) {
 }
 document.querySelectorAll("#hzTabs button").forEach((b) => (b.onclick = () => { S.hz = b.dataset.h; document.querySelectorAll("#hzTabs button").forEach((x) => x.classList.toggle("on", x === b)); if (S.sel) { pintarEscHist(S.sel); pintarVelas(S.sel); } }));
 
+// ---------------- TU PLAN: caminos de inversión con reglas simples (data/plan.json)
+S.plan = null; S.perfil = ls.get("tr_perfil", "moderado"); S.planReg = {};
+async function cargarPlan() {
+  try { S.plan = await (await fetch("data/plan.json", { cache: "no-store" })).json(); } catch { S.plan = null; }
+  if (!S.plan) { $("#planResumen").textContent = "No se encontró data/plan.json."; return; }
+  $("#descartados").innerHTML = S.plan.descartados.map((d) => `<li><b>${esc(d.nombre)}:</b> ${esc(d.razon)}</li>`).join("");
+  $("#planNota").textContent = `${S.plan.nota} Periodo ${S.plan.periodo.inicio.slice(0, 4)}-${S.plan.periodo.fin.slice(0, 4)}. Herramienta de análisis basada en datos históricos; no garantiza resultados futuros ni es asesoría personalizada.`;
+  document.querySelectorAll("#pPerfil button").forEach((b) => b.classList.toggle("on", b.dataset.p === S.perfil));
+  pintarPlan();
+}
+const simbolosPlan = () => (S.plan ? S.plan.procesos.filter((x) => x.simbolo).map((x) => x.simbolo) : []);
+function fechaLarga(f) { try { return new Date(f + "T12:00:00Z").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }); } catch { return f; } }
+function estadoProceso(p) {
+  if (p.tipo === "cetes") return null;
+  const s = serieConVivo(p.simbolo); if (!s || s.c.length < 220) return null;
+  const r = Motor.regimen(s, p.regla); S.planReg[p.id] = r; return r;
+}
+function vista(p, r) {
+  const prox = fechaLarga(proximoCierreMes()), dist = r ? pct(r.distancia_pct) : "";
+  if (!r) return { cls: "n", accion: "Cargando…", que: "", nuevo: "" };
+  if (r.senal === "VENDER") return { cls: "r", accion: "VENDER", que: r.hoy_decide && mercadoAbierto() ? "Señal preliminar: si cierra hoy debajo de su media, vende mañana en la apertura." : "Señal confirmada: vende en la próxima apertura y pasa el dinero a CETES.", nuevo: "Si no tienes: no compres." };
+  if (r.senal === "COMPRAR") return { cls: "g", accion: "COMPRAR", que: r.hoy_decide && mercadoAbierto() ? "Señal preliminar: si cierra hoy sobre su media, compra mañana en la apertura." : "Señal confirmada: compra en la próxima apertura.", nuevo: "Si no tienes: compra en la próxima apertura." };
+  if (r.estado === "INVERTIDO") return r.distancia_pct >= 0
+    ? { cls: "g", accion: "MANTENER", que: `Tendencia sana: está ${dist} sobre su media de 200 días.`, nuevo: "Si aún no tienes: puedes comprar hoy." }
+    : { cls: "y", accion: "MANTENER · vigilar", que: `Está ${dist} debajo de su media. Si cierra así el ${prox}, la señal será VENDER.`, nuevo: `Si aún no tienes: espera a la decisión del ${prox}.` };
+  return r.distancia_pct > 0
+    ? { cls: "b", accion: "EN PAUSA · vigilar", que: `Ya está ${dist} sobre su media. Si cierra así el ${prox}, la señal será COMPRAR.`, nuevo: `Si aún no tienes: espera a la decisión del ${prox}.` }
+    : { cls: "n", accion: "EN PAUSA", que: `Está ${dist} debajo de su media: este dinero espera en CETES.`, nuevo: "Si aún no tienes: no compres todavía." };
+}
+function pintarPlan() {
+  if (!S.plan) return;
+  const pesos = S.plan.perfiles[S.perfil].pesos, cap = capital();
+  const items = S.plan.procesos.filter((p) => (pesos[p.id] ?? 0) > 0);
+  let enPausa = 0; const comprarHoy = [], esperar = [], vender = [], pausa = [];
+  const tarjetas = items.map((p) => {
+    const r = estadoProceso(p), w = pesos[p.id], monto = cap * w;
+    if (p.tipo === "cetes") return { p, r, w, monto };
+    const v = vista(p, r);
+    if (r && (r.estado === "EFECTIVO" && r.senal !== "COMPRAR")) enPausa += monto;
+    if (r && r.senal === "VENDER") vender.push(p.nombre);
+    else if (v.nuevo.startsWith("Si aún no tienes: puedes") || r?.senal === "COMPRAR") comprarHoy.push(p.nombre);
+    else if (r && v.accion === "EN PAUSA") pausa.push(p.nombre);
+    else if (r) esperar.push(p.nombre);
+    return { p, r, w, monto, v };
+  });
+  $("#procesos").innerHTML = tarjetas.map(({ p, r, w, monto, v }) => {
+    const ev = p.evidencia.todo.con_regla, sin = p.evidencia.todo.sin_regla;
+    if (p.tipo === "cetes") {
+      const total = monto + enPausa;
+      return `<div class="proc k-g"><div class="tags"><span>${esc(p.plazo)}</span><span>${esc(p.rol)}</span></div><h3>${esc(p.nombre)}</h3>
+        <div class="accion g">MANTENER</div><div class="monto">$${fmt(total, 0)} MXN</div>
+        <p class="que">${fmt(w * 100, 0)}% de colchón${enPausa ? ` + $${fmt(enPausa, 0)} de índices en pausa` : ""}. Rinde ~${fmt(p.evidencia.t2.con_regla.cagr_pct, 1)}% al año sin caídas (promedio 2016-2026).</p>
+        <p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p><p class="small mut">${esc(p.como)}</p></div>`;
+    }
+    const q = S.q[p.simbolo];
+    return `<div class="proc k-${v.cls}"><div class="tags"><span>${esc(p.plazo)}</span><span>${esc(p.rol)}</span></div><h3>${esc(p.nombre)}</h3>
+      <div class="accion ${v.cls}">${esc(v.accion)}</div><div class="monto">$${fmt(monto, 0)} MXN · ${fmt(w * 100, 0)}% de tu capital</div>
+      <p class="que">${esc(v.que)}</p><p class="que"><b>${esc(v.nuevo)}</b></p>
+      <p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p>
+      <p class="small mut">${esc(p.como)}${q ? ` · precio ${fmt(q.price)} ${q.currency || ""}${q.edadMin > 3 ? ` (hace ${q.edadMin} min)` : ""}` : ""}</p>
+      <details><summary>¿Por qué confiar en esta regla?</summary><p class="small ink2">En 20 años, con la regla: <b>${fmt(ev.cagr_pct, 1)}% al año</b> y peor caída de <b>${fmt(ev.max_dd_pct, 0)}%</b>. Sin la regla: ${fmt(sin.cagr_pct, 1)}% al año y caída de ${fmt(sin.max_dd_pct, 0)}%. ${ev.crisis?.["Crisis 2008"] != null ? `En 2008: ${fmt(ev.crisis["Crisis 2008"], 0)}% con la regla contra ${fmt(sin.crisis["Crisis 2008"], 0)}% sin ella.` : ""} Validación 2016-2026: ${fmt(p.evidencia.t2.con_regla.cagr_pct, 1)}% al año (sin regla ${fmt(p.evidencia.t2.sin_regla.cagr_pct, 1)}%). ${p.falsas_alarmas ? `Ojo: ${fmt(p.falsas_alarmas.pct, 0)}% de sus salidas fueron falsas alarmas (se revirtieron en menos de 3 meses).` : ""}</p></details></div>`;
+  }).join("");
+  const pf = S.plan.perfiles[S.perfil], cf = pf.con_filtro.todo, sf = pf.sin_filtro.todo;
+  const nombre = { conservador: "Conservador", moderado: "Moderado", agresivo: "Agresivo" }[S.perfil];
+  $("#planResumen").innerHTML = `Con <b>$${fmt(cap, 0)} MXN</b> y perfil <b>${nombre}</b>: `
+    + (vender.length ? `<b class="r">vende ${esc(vender.join(" y "))}</b>; ` : "")
+    + (comprarHoy.length ? `<b class="g">puedes comprar hoy ${esc(comprarHoy.join(", "))}</b>; ` : "")
+    + (esperar.length ? `<b class="y">vigila ${esc(esperar.join(", "))} hasta la decisión de fin de mes</b>; ` : "")
+    + (pausa.length ? `${esc(pausa.join(", "))} sigue${pausa.length > 1 ? "n" : ""} en pausa; ` : "")
+    + `el resto queda en CETES. Cada índice se revisa solo una vez al mes.`;
+  const prox = proximoCierreMes(), hoy = new Date().toISOString().slice(0, 10);
+  $("#planAviso").innerHTML = prox === hoy || Object.values(S.planReg).some((r) => r.hoy_decide)
+    ? `<b>Hoy se decide.</b> Revisa esta página 10-15 minutos antes del cierre (15:00 CDMX). Si algún índice cruza su media, aparecerá una ventana con la instrucción.`
+    : `<b>Próxima decisión: ${esc(fechaLarga(prox))}, al cierre (15:00 CDMX).</b> Hasta entonces no tienes que hacer nada, salvo comprar lo que dice «puedes comprar hoy» si aún no lo tienes.`;
+  $("#planEspera").innerHTML = `Qué esperar con el perfil ${nombre} (20 años, con las reglas): <b>~${fmt(cf.cagr_pct, 1)}% al año</b>, con una peor caída de <b>${fmt(cf.max_dd_pct, 0)}%</b>${cf.crisis?.["Crisis 2008"] != null ? ` (en 2008: ${fmt(cf.crisis["Crisis 2008"], 0)}%)` : ""}. Sin las reglas habría sido ${fmt(sf.cagr_pct, 1)}% al año, pero con caídas de hasta ${fmt(sf.max_dd_pct, 0)}%.`;
+}
+function evaluarPlan() {
+  if (!S.plan) return;
+  const abierto = mercadoAbierto();
+  for (const p of S.plan.procesos) {
+    if (p.tipo !== "filtro" || !(S.plan.perfiles[S.perfil].pesos[p.id] > 0)) continue;
+    const r = estadoProceso(p); if (!r || !S.q[p.simbolo]) continue;
+    let tipo = null;
+    if (r.senal !== "MANTENER" && r.hoy_decide) tipo = abierto ? "preliminar" : "confirmada";
+    else if (r.hoy_decide && abierto && Math.abs(r.distancia_pct) < 1.5) tipo = "cerca";
+    if (!tipo) continue;
+    const k = `${r.fecha}|${p.nombre}|${tipo}|${r.senal}`;
+    if (S.senales[k]) continue;
+    S.senales[k] = Date.now(); ls.set("tr_senales", S.senales);
+    const m = { simbolo: p.simbolo, como_comprar: p.como, regla: p.regla, episodios: p.episodios, falsas_alarmas: p.falsas_alarmas,
+      con_regla: { completo: p.evidencia.todo.con_regla }, comprar_y_mantener: { completo: p.evidencia.todo.sin_regla } };
+    S.colaModal.push({ nombre: p.nombre, m, r, tipo });
+  }
+  pintarPlan(); siguienteModal();
+}
+document.querySelectorAll("#pPerfil button").forEach((b) => (b.onclick = () => { S.perfil = b.dataset.p; ls.set("tr_perfil", S.perfil); document.querySelectorAll("#pPerfil button").forEach((x) => x.classList.toggle("on", x === b)); pintarPlan(); }));
+$("#pCap").value = ls.get("tr_cap", 100000);
+$("#pCap").addEventListener("input", () => { ls.set("tr_cap", +$("#pCap").value || 0); $("#kCap").value = $("#pCap").value; pintarPlan(); pintarEstrategia(); });
+// mover controles técnicos a la terminal avanzada para que el encabezado quede limpio
+["#hist", "#btnMotor", "#btnClaude", "#btnStop"].forEach((id) => $("#avzBar").append($(id)));
+
 // ---------------- arranque
 let arrancando = false;
 async function arrancar() {
@@ -773,8 +922,8 @@ async function arrancar() {
   try { S.srv = await api("/api/estado"); } catch { arrancando = false; return; }
   $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : S.estatico ? "No disponible en GitHub Pages (requiere servidor)" : "Configura ANTHROPIC_API_KEY";
   if (S.estatico) { $("#btnSalir").hidden = true; }
-  await cargarEvidencia(); cargarPatrones();
-  cargarSeries(simbolosEstrategia()).then(evaluarEstrategia).catch((e) => showErr("Estrategia: " + e.message));
+  await cargarEvidencia(); await cargarPlan(); cargarPatrones();
+  cargarSeries(simbolosEstrategia()).then(() => { evaluarEstrategia(); evaluarPlan(); }).catch((e) => showErr("Estrategia: " + e.message));
   const h = ls.get("tr_hist", []);
   if (h.length) S.rep = h[0]; else await cargarWorker(false);
   pintarHist(); render(); refrescar(); arrancando = false;

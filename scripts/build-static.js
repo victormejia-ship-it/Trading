@@ -17,6 +17,7 @@ function simbolos() {
   const s = new Set([...DEF_INDICES, ...DEF_ACTIVOS]);
   try { const w = JSON.parse(fs.readFileSync(path.join(RAIZ, "watchlist.json"), "utf8")); [...w.indices, ...w.activos].forEach((x) => s.add(x)); } catch {}
   try { const e = JSON.parse(fs.readFileSync(path.join(RAIZ, "public/data/estrategia.json"), "utf8")); Object.values(e.mangas).forEach((m) => s.add(m.simbolo)); } catch {}
+  try { const pl = JSON.parse(fs.readFileSync(path.join(RAIZ, "public/data/plan.json"), "utf8")); pl.procesos.forEach((x) => x.simbolo && s.add(x.simbolo)); } catch {}
   s.add("MXN=X");
   return [...s];
 }
