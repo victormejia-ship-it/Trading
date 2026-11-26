@@ -107,6 +107,12 @@ code{font:13px var(--mono);background:var(--s2);padding:1px 4px;border-radius:3p
 .extras{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:6px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chips .chip{font-size:13px;padding:3px 9px}
+.lab{padding-block:4px 10px}
+.lab>summary{cursor:pointer;font:600 18px var(--sans);padding-block:14px;border-top:1px solid var(--line)}
+.labgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px;margin-top:6px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5em,1fr));gap:8px}
+.kpi{background:var(--s2);border-radius:8px;padding:8px 10px}.kpi b{display:block;font:700 19px var(--mono)}.kpi span{font-size:12.5px;color:var(--mut)}
+.candado{border:2px solid var(--dn);background:color-mix(in srgb,var(--dn) 10%,var(--s1));border-radius:8px;padding:10px 12px;font-weight:600}
 .avzSum{cursor:pointer;font:600 16px var(--sans);padding-block:16px;list-style:revert;border-top:1px solid var(--line)}
 #repTxt{display:none}
 footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
@@ -173,8 +179,55 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
   <p class="small mut" id="planNota"></p>
 </section>
 
+<section class="wrap">
+<details class="lab" id="labTrading">
+  <summary>Laboratorio de trading <span class="mono small mut" id="labResumenTop"></span></summary>
+  <div id="labCandado"></div>
+  <div class="labgrid">
+    <section class="card">
+      <h2>Tu meta <span class="mut small mono" id="lbMetaFechas"></span></h2>
+      <div class="kpis" id="lbMeta"></div>
+      <div class="bar" style="height:12px;margin:10px 0 4px"><span id="lbMetaBar" style="width:0;background:var(--up)"></span></div>
+      <p class="small" id="lbMetaTxt"></p>
+      <details><summary class="small">Configurar laboratorio</summary>
+        <div class="calc" style="margin-top:8px">
+          <label class="f">Capital del laboratorio (MXN)<input id="lbCap" type="number" min="0" step="1000"></label>
+          <label class="f">Riesgo por operación %<input id="lbRiesgo" type="number" min="0.1" max="3" step="0.1"></label>
+          <label class="f">Pérdida máx. al mes %<input id="lbMaxMes" type="number" min="1" max="20" step="0.5"></label>
+          <label class="f">Comisión por lado %<input id="lbCom" type="number" min="0" max="2" step="0.01"></label>
+          <label class="f">Meta (USD)<input id="lbMetaUsd" type="number" min="0" step="500"></label>
+          <label class="f">Plazo (meses)<input id="lbMetaMeses" type="number" min="1" max="60" step="1"></label>
+          <label class="f">Inicio<input id="lbInicio" type="date"></label>
+        </div>
+        <div class="acts" style="margin-top:8px"><button id="lbGuardarCfg">Guardar</button><button id="lbExport">Exportar respaldo</button><label class="f" style="display:inline-flex">Importar respaldo<input id="lbImport" type="file" accept="application/json"></label></div>
+      </details>
+    </section>
+    <section class="card">
+      <h2>Nueva operación</h2>
+      <form id="lbForm" class="calc">
+        <label class="f">Modo<select id="lbModo"><option value="sim">Simulación</option><option value="real">Real</option></select></label>
+        <label class="f">Activo<input id="lbTk" placeholder="NAFTRACISHRS.MX" required></label>
+        <label class="f">Estrategia<select id="lbEst"><option>Filtro 200 días</option><option>RSI(2)</option><option>Patrón de velas</option><option>Ruptura</option><option>Otra</option></select></label>
+        <label class="f">Precio de entrada<input id="lbEnt" type="number" step="0.0001" required></label>
+        <label class="f">Stop (salida si pierde)<input id="lbStop" type="number" step="0.0001" required></label>
+        <label class="f">Objetivo<input id="lbObj" type="number" step="0.0001"></label>
+        <label class="f">Títulos<input id="lbTit" type="number" min="0" step="1"></label>
+        <label class="f">Moneda<select id="lbMon"><option value="MXN">MXN</option><option value="USD">USD (SIC)</option></select></label>
+        <div style="grid-column:1/-1"><p class="small" id="lbCalc"></p><button class="pri" id="lbAbrir">Registrar operación</button></div>
+      </form>
+    </section>
+  </div>
+  <section class="card" style="margin-top:12px">
+    <h2>Resultados <span class="mut small mono" id="lbVeredicto"></span></h2>
+    <div class="kpis" id="lbKpis"></div>
+    <div class="scroll" style="margin-top:10px"><table id="lbTabla"><thead><tr><th>Activo</th><th>Modo</th><th class="num">Entrada</th><th class="num">Stop / Obj.</th><th class="num">Títulos</th><th class="num">Resultado</th><th></th></tr></thead><tbody></tbody></table></div>
+    <p class="small mut">Las operaciones se guardan solo en este navegador. Exporta un respaldo de vez en cuando. GBM no permite vender en corto en el SIC, así que solo se registran compras.</p>
+  </section>
+</details>
+</section>
+
 <details id="avanzado">
-<summary class="wrap avzSum">Terminal avanzada: mercado, watchlist, gráficos, velas y laboratorio</summary>
+<summary class="wrap avzSum">Terminal avanzada: mercado, watchlist, gráficos, velas y laboratorio de estrategias</summary>
 <div class="wrap acts" id="avzBar" style="padding-top:8px"></div>
 <main class="wrap">
   <div class="col">
@@ -408,7 +461,7 @@ async function refrescar() {
       S.q = { ...S.q, ...j.cotizaciones };
       const edad = S.estatico && S.generadoEstatico ? Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000)) : 0;
       $("#actTxt").textContent = S.estatico ? `Precios de hace ${edad < 60 ? edad + " min" : Math.round(edad / 60) + " h"}` : "Precios " + new Date().toLocaleTimeString("es-MX");
-      pintarVivo(); revisarAlertas(); evaluarEstrategia(); evaluarPlan();
+      pintarVivo(); revisarAlertas(); evaluarEstrategia(); evaluarPlan(); pintarLab();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
   pollTimer = setTimeout(refrescar, (abierto ? (S.estatico ? 60 : S.cfg.poll) : 300) * 1000);
@@ -977,6 +1030,125 @@ function pintarContexto() {
 }
 $("#pAhorro").value = ls.get("tr_ahorro", 10000);
 $("#pAhorro").addEventListener("input", () => { ls.set("tr_ahorro", +$("#pAhorro").value || 0); pintarMeta(); });
+
+// ---------------- LABORATORIO DE TRADING (localStorage; candados de riesgo; meta)
+const LB_DEF = { cap: 100000, riesgo: 1, maxMes: 5, com: 0.29, metaUsd: 5000, metaMeses: 6, inicio: new Date().toISOString().slice(0, 10) };
+const LB = { cfg: { ...LB_DEF, ...ls.get("tr_lab_cfg", {}) }, ops: ls.get("tr_lab_ops", []) };
+const lbFx = () => S.q["MXN=X"]?.price || S.retiros?.supuestos?.tipo_cambio_hoy || 19.5;
+const lbGuardar = () => { ls.set("tr_lab_cfg", LB.cfg); ls.set("tr_lab_ops", LB.ops); };
+function lbAMxn(op, px) { return op.mon === "USD" ? px * lbFx() : px; }
+function lbResultado(op, salida) {
+  const c = LB.cfg.com / 100, ent = lbAMxn(op, op.ent), sal = lbAMxn(op, salida);
+  const pnl = op.tit * (sal * (1 - c) - ent * (1 + c)), riesgo = op.tit * (ent - lbAMxn(op, op.stop));
+  return { pnl, r: riesgo > 0 ? pnl / riesgo : 0 };
+}
+function lbMesActual(op) { return (op.cierre || "").slice(0, 7) === new Date().toISOString().slice(0, 7); }
+function lbStats() {
+  const cerr = LB.ops.filter((o) => o.salida != null), reales = cerr.filter((o) => o.modo === "real");
+  const sumar = (arr) => arr.reduce((a, o) => a + lbResultado(o, o.salida).pnl, 0);
+  const pnlMesReal = sumar(reales.filter(lbMesActual));
+  const base = cerr.filter((o) => o.modo === (reales.length ? "real" : "sim"));
+  const rs = base.map((o) => lbResultado(o, o.salida).r), pnl = sumar(base);
+  let eq = 0, pico = 0, dd = 0; for (const o of base.slice().sort((a, b) => (a.cierre < b.cierre ? -1 : 1))) { eq += lbResultado(o, o.salida).pnl; pico = Math.max(pico, eq); dd = Math.min(dd, eq - pico); }
+  const dias = Math.max(1, (Date.now() - Date.parse(LB.cfg.inicio)) / 864e5), cetes = LB.cfg.cap * 0.063 * dias / 365;
+  return { n: base.length, modo: reales.length ? "real" : "sim", gan: rs.length ? (100 * rs.filter((r) => r > 0).length) / rs.length : null,
+    rMedio: rs.length ? rs.reduce((a, b) => a + b, 0) / rs.length : null, pnl, dd, cetes, pnlMesReal, pnlRealTotal: sumar(reales) };
+}
+function lbCandado() {
+  const st = lbStats(), lim = -(LB.cfg.cap * LB.cfg.maxMes) / 100;
+  return { activo: st.pnlMesReal <= lim, st, lim };
+}
+function lbCalcular() {
+  const e = +$("#lbEnt").value, s = +$("#lbStop").value, o = +$("#lbObj").value, mon = $("#lbMon").value, fx = mon === "USD" ? lbFx() : 1;
+  if (!(e > 0 && s > 0 && e > s)) { $("#lbCalc").textContent = "El stop debe estar por debajo de la entrada."; return null; }
+  const riesgoMxn = (LB.cfg.cap * LB.cfg.riesgo) / 100, tit = Math.floor(riesgoMxn / ((e - s) * fx));
+  if (!$("#lbTit").dataset.manual) $("#lbTit").value = tit;
+  const t = +$("#lbTit").value || tit, rr = o > e ? (o - e) / (e - s) : null, monto = t * e * fx;
+  $("#lbCalc").innerHTML = `Arriesgas <b>$${fmt(t * (e - s) * fx, 0)}</b> (${fmt((100 * t * (e - s) * fx) / LB.cfg.cap, 2)}% del laboratorio) · monto $${fmt(monto, 0)}`
+    + (rr != null ? ` · R:R <b class="${rr >= 2 ? "g" : "r"}">1:${fmt(rr, 2)}</b>${rr < 2 ? " (menor a 1:2)" : ""}` : "")
+    + (monto > LB.cfg.cap ? ` · <b class="r">supera tu capital</b>` : "");
+  return { tit: t, rr, monto };
+}
+["#lbEnt", "#lbStop", "#lbObj", "#lbMon"].forEach((id) => $(id).addEventListener("input", () => { delete $("#lbTit").dataset.manual; lbCalcular(); }));
+$("#lbTit").addEventListener("input", () => { $("#lbTit").dataset.manual = "1"; lbCalcular(); });
+$("#lbForm").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const c = lbCalcular(); if (!c || !(c.tit > 0)) return;
+  const modo = $("#lbModo").value;
+  if (modo === "real" && lbCandado().activo) { $("#lbCalc").innerHTML = `<b class="r">Candado activo: alcanzaste tu pérdida máxima del mes. Solo puedes registrar simulaciones hasta el día 1.</b>`; return; }
+  if (modo === "real" && LB.ops.filter((o) => o.modo === "sim" && o.salida != null).length < 20 && !confirm2()) return;
+  LB.ops.unshift({ id: Date.now().toString(36), modo, tk: $("#lbTk").value.trim().toUpperCase(), est: $("#lbEst").value, ent: +$("#lbEnt").value, stop: +$("#lbStop").value,
+    obj: +$("#lbObj").value || null, tit: c.tit, mon: $("#lbMon").value, apertura: new Date().toISOString().slice(0, 10), salida: null, cierre: null });
+  lbGuardar(); $("#lbForm").reset(); delete $("#lbTit").dataset.manual; $("#lbCalc").textContent = ""; pintarLab();
+});
+let lbAvisoReal = false;
+function confirm2() {   // aviso (sin window.confirm): primer intento real sin 20 simulaciones cerradas
+  if (lbAvisoReal) return true;
+  lbAvisoReal = true;
+  $("#lbCalc").innerHTML = `<b class="y">Recomendación: cierra al menos 20 operaciones simuladas antes de usar dinero real. Si aun así quieres continuar, vuelve a pulsar «Registrar operación».</b>`;
+  return false;
+}
+function lbCerrar(id) {
+  const op = LB.ops.find((o) => o.id === id); if (!op) return;
+  const fila = document.querySelector(`tr[data-lb="${id}"] input`); const px = +fila?.value;
+  if (!(px > 0)) { fila?.focus(); return; }
+  op.salida = px; op.cierre = new Date().toISOString().slice(0, 10); lbGuardar(); pintarLab();
+}
+function lbBorrar(id) { LB.ops = LB.ops.filter((o) => o.id !== id); lbGuardar(); pintarLab(); }
+function pintarLab() {
+  const c = LB.cfg, st = lbStats(), cand = lbCandado(), fx = lbFx();
+  // meta
+  const metaMxn = c.metaUsd * fx, fin = new Date(Date.parse(c.inicio) + c.metaMeses * 30.44 * 864e5), restanMeses = Math.max(0, (fin - Date.now()) / (30.44 * 864e5));
+  const ganado = st.modo === "real" ? st.pnlRealTotal : st.pnl, falta = Math.max(0, metaMxn - ganado), av = Math.max(0, Math.min(100, (100 * ganado) / metaMxn));
+  const reqTotal = (100 * metaMxn) / c.cap, reqMes = restanMeses > 0 ? (Math.pow(1 + falta / c.cap, 1 / restanMeses) - 1) * 100 : null;
+  $("#lbMetaFechas").textContent = `${c.inicio} → ${fin.toISOString().slice(0, 10)}`;
+  $("#lbMeta").innerHTML = [[`US$${fmt(c.metaUsd, 0)}`, `meta (≈ $${fmt(metaMxn, 0)} MXN)`], [`$${fmt(ganado, 0)}`, `ganado (${st.modo === "real" ? "real" : "simulado"})`],
+    [`${fmt(reqTotal, 0)}%`, "rendimiento total necesario"], [reqMes != null ? `${fmt(reqMes, 1)}%` : "—", "necesario por mes desde hoy"]]
+    .map(([b, t]) => `<div class="kpi"><b>${b}</b><span>${t}</span></div>`).join("");
+  $("#lbMetaBar").style.width = av + "%";
+  const nivel = reqMes == null ? "" : reqMes <= 1 ? `<b class="g">Alcanzable con disciplina.</b>` : reqMes <= 3 ? `<b class="y">Excepcional: muy pocos lo sostienen.</b>` : `<b class="r">Irreal: perseguirlo empuja a arriesgar de más y perder la cuenta.</b>`;
+  $("#lbMetaTxt").innerHTML = `${nivel} Como referencia, el plan moderado ha dado ~0.9% al mes en promedio. Con este capital, una meta sostenible en ${c.metaMeses} meses sería ~US$${fmt((c.cap * (Math.pow(1.009, c.metaMeses) - 1)) / fx, 0)}.`;
+  // candado
+  $("#labCandado").innerHTML = cand.activo ? `<div class="candado">Candado activo: perdiste $${fmt(-st.pnlMesReal, 0)} este mes (límite $${fmt(-cand.lim, 0)}). Hasta el día 1, solo simulación.</div>` : "";
+  // KPIs
+  const ventaja = st.n >= 50 ? (st.rMedio > 0 && st.pnl > st.cetes ? `<span class="chip g">✓ Con ventaja en ${st.n} operaciones</span>` : `<span class="chip r">✕ Sin ventaja: considera dejarlo</span>`) : `<span class="chip n">Faltan ${50 - st.n} operaciones para juzgar</span>`;
+  $("#lbVeredicto").innerHTML = ventaja;
+  $("#lbKpis").innerHTML = [[st.n, `operaciones cerradas (${st.modo === "real" ? "reales" : "simuladas"})`], [st.gan != null ? fmt(st.gan, 0) + "%" : "—", "ganadoras"],
+    [st.rMedio != null ? fmt(st.rMedio, 2) + "R" : "—", "ganancia media por operación"], [`$${fmt(st.pnl, 0)}`, "resultado neto de comisiones"],
+    [`$${fmt(st.cetes, 0)}`, "lo que habría dado CETES"], [`$${fmt(st.dd, 0)}`, "peor racha"],
+    [`$${fmt(st.pnlMesReal, 0)}`, `real este mes (límite −$${fmt(-cand.lim, 0)})`]].map(([b, t]) => `<div class="kpi"><b>${b}</b><span>${t}</span></div>`).join("");
+  // tabla
+  $("#lbTabla tbody").innerHTML = LB.ops.map((o) => {
+    const q = S.q[o.tk], abierta = o.salida == null;
+    const res = abierta ? (q ? lbResultado(o, q.price) : null) : lbResultado(o, o.salida);
+    const estado = abierta ? (q ? `${fmt(q.price)} ahora` : "abierta") : `cerrada ${esc(o.cierre)}`;
+    return `<tr data-lb="${esc(o.id)}"><td><b>${esc(o.tk)}</b><br><span class="mut">${esc(o.est)} · ${esc(o.apertura)}</span></td><td>${o.modo === "real" ? `<span class="chip y">Real</span>` : `<span class="chip n">Sim</span>`}</td>
+      <td class="num">${fmt(o.ent, 2)} ${esc(o.mon)}</td><td class="num">${fmt(o.stop, 2)} / ${o.obj ? fmt(o.obj, 2) : "—"}</td><td class="num">${fmt(o.tit, 0)}</td>
+      <td class="num ${res ? (res.pnl >= 0 ? "g" : "r") : ""}">${res ? `$${fmt(res.pnl, 0)} · ${fmt(res.r, 2)}R` : "—"}<br><span class="mut">${estado}</span></td>
+      <td>${abierta ? `<input type="number" step="0.0001" placeholder="precio salida" style="width:8em"> <button data-cerrar="${esc(o.id)}">Cerrar</button>` : ""} <button data-borrar="${esc(o.id)}" title="Borrar">✕</button></td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="mut">Aún no registras operaciones. Empieza en modo Simulación.</td></tr>`;
+  document.querySelectorAll("[data-cerrar]").forEach((b) => (b.onclick = () => lbCerrar(b.dataset.cerrar)));
+  document.querySelectorAll("[data-borrar]").forEach((b) => (b.onclick = () => lbBorrar(b.dataset.borrar)));
+  $("#labResumenTop").textContent = `· ${st.n} cerradas · $${fmt(st.pnl, 0)} · meta ${fmt(av, 0)}%${cand.activo ? " · CANDADO" : ""}`;
+  lbRevisarAbiertas();
+}
+const lbAvisados = ls.get("tr_lab_avisos", {});
+function lbRevisarAbiertas() {
+  for (const o of LB.ops.filter((x) => x.salida == null)) {
+    const q = S.q[o.tk]; if (!q) continue;
+    const ev = q.price <= o.stop ? "stop" : o.obj && q.price >= o.obj ? "objetivo" : null;
+    if (ev && !lbAvisados[o.id + ev]) { lbAvisados[o.id + ev] = 1; ls.set("tr_lab_avisos", lbAvisados); avisar([`${o.tk}: tocó su ${ev} (${fmt(q.price)}). Registra el cierre en el laboratorio.`]); }
+  }
+}
+function lbCfgEnForm() { const c = LB.cfg; $("#lbCap").value = c.cap; $("#lbRiesgo").value = c.riesgo; $("#lbMaxMes").value = c.maxMes; $("#lbCom").value = c.com; $("#lbMetaUsd").value = c.metaUsd; $("#lbMetaMeses").value = c.metaMeses; $("#lbInicio").value = c.inicio; }
+$("#lbGuardarCfg").onclick = () => {
+  LB.cfg = { cap: Math.max(0, +$("#lbCap").value || 0), riesgo: Math.min(3, Math.max(0.1, +$("#lbRiesgo").value || 1)), maxMes: Math.min(20, Math.max(1, +$("#lbMaxMes").value || 5)),
+    com: Math.max(0, +$("#lbCom").value || 0), metaUsd: Math.max(0, +$("#lbMetaUsd").value || 0), metaMeses: Math.max(1, +$("#lbMetaMeses").value || 6), inicio: $("#lbInicio").value || LB_DEF.inicio };
+  lbGuardar(); pintarLab();
+};
+$("#lbExport").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ cfg: LB.cfg, ops: LB.ops }, null, 1)], { type: "application/json" })); a.download = `laboratorio-trading-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
+$("#lbImport").onchange = async (e) => { try { const d = JSON.parse(await e.target.files[0].text()); if (Array.isArray(d.ops)) { LB.ops = d.ops; LB.cfg = { ...LB_DEF, ...(d.cfg || {}) }; lbGuardar(); lbCfgEnForm(); pintarLab(); } } catch { $("#lbCalc").textContent = "Archivo de respaldo inválido."; } e.target.value = ""; };
+lbCfgEnForm(); pintarLab();
 
 // ---------------- arranque
 let arrancando = false;
