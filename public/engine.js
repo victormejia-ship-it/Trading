@@ -329,6 +329,36 @@
     o.fuente = "MOTOR_DETERMINISTA"; return o;
   }
 
-  const api = { enrich, analizar, mercado, validarMercado, validarActivo, fallbackMercado, fallbackActivo, a100, ENUM, CFG };
+  // ---------- filtro de régimen (estrategia validada a 20 años: backtest/cartera_nucleo.py)
+  // regla "sma200_mensual": se decide SOLO al cierre del último día hábil del mes; "sma200_banda": diario con banda ±2%.
+  function esFinDeMes(fechas, i) { return i === fechas.length - 1 ? null : fechas[i].slice(0, 7) !== fechas[i + 1].slice(0, 7); }
+  function ultimoHabilDelMes(fecha) {   // aproximación sin feriados: el siguiente día hábil cae en otro mes
+    const d = new Date(fecha + "T12:00:00Z"); do { d.setUTCDate(d.getUTCDate() + 1); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+    return d.toISOString().slice(0, 7) !== fecha.slice(0, 7);
+  }
+  function regimen(s, regla = "sma200_mensual", banda = 0.02) {
+    const c = s.c, n = c.length, m200 = sma(c, 200);
+    const estados = new Array(n).fill(1);
+    let est = 1;
+    for (let i = 0; i < n; i++) {
+      if (isNum(m200[i])) {
+        if (regla === "sma200_mensual") { if (esFinDeMes(s.t, i)) est = c[i] > m200[i] ? 1 : 0; }
+        else if (regla === "sma200_banda") { if (est === 1 && c[i] < m200[i] * (1 - banda)) est = 0; else if (est === 0 && c[i] > m200[i] * (1 + banda)) est = 1; }
+      }
+      estados[i] = est;
+    }
+    const i = n - 1, S = m200[i], estado = estados[n - 2] ?? 1;   // posición vigente antes de evaluar la última vela
+    let decision = estado, umbral;
+    const hoyEsDecision = regla === "sma200_banda" || ultimoHabilDelMes(s.t[i]);
+    if (regla === "sma200_mensual") { umbral = S; if (hoyEsDecision && isNum(S)) decision = c[i] > S ? 1 : 0; }
+    else { umbral = estado === 1 ? S * (1 - banda) : S * (1 + banda); if (isNum(S)) decision = estados[i]; }
+    // fecha del último cambio
+    let ultimoCambio = null; for (let j = n - 1; j > 0; j--) if (estados[j] !== estados[j - 1]) { ultimoCambio = s.t[j]; break; }
+    return { regla, fecha: s.t[i], precio: rnd(c[i], 4), sma200: rnd(S, 4), umbral: rnd(umbral, 4), estado: estado ? "INVERTIDO" : "EFECTIVO",
+      senal: decision === estado ? "MANTENER" : decision === 1 ? "COMPRAR" : "VENDER", hoy_decide: hoyEsDecision,
+      distancia_pct: isNum(umbral) ? rnd((c[i] / umbral - 1) * 100) : null, ultimo_cambio: ultimoCambio, estados };
+  }
+
+  const api = { enrich, analizar, mercado, validarMercado, validarActivo, fallbackMercado, fallbackActivo, a100, ENUM, CFG, regimen, ultimoHabilDelMes };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Motor = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

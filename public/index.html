@@ -76,6 +76,14 @@ dialog::backdrop{background:rgb(0 0 0/.55)}
 .prog{font:12.5px var(--mono);display:flex;flex-wrap:wrap;gap:6px}
 a{color:var(--acc)}
 code{font:13px var(--mono);background:var(--s2);padding:1px 4px;border-radius:3px}
+.mangas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:10px}
+.manga{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--s2)}
+.manga h3{font:600 14px var(--sans);margin:0 0 4px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.evid{font-size:13px;color:var(--ink2);margin:8px 0 0}
+#dlgSenal{max-width:min(620px,94vw)}
+#dlgSenal .accion{font:700 26px/1.1 var(--mono);margin:4px 0 2px}
+#dlgSenal .grid{display:grid;grid-template-columns:auto auto;gap:4px 16px;font:13.5px var(--mono);margin:10px 0}
+#dlgSenal .grid dd{margin:0;text-align:right}
 footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 </style>
 </head>
@@ -100,6 +108,13 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 
 <main class="wrap">
   <div class="col">
+    <section class="card" id="estrategia">
+      <h2>Estrategia validada · 20 años <span class="mut small mono" id="estFuente"></span></h2>
+      <p class="small ink2" id="estDesc">Cargando evidencia…</p>
+      <div class="mangas" id="mangas"></div>
+      <p class="evid" id="estEvid"></p>
+      <details style="margin-top:8px"><summary class="mono small">Evidencia completa y bitácora</summary><div id="estDet"></div><div id="bitacora"></div></details>
+    </section>
     <section class="card">
       <h2>Estado de mercado <span class="mut small mono" id="mkFuente"></span></h2>
       <div class="light">
@@ -169,6 +184,16 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 </main>
 <footer class="wrap">Herramienta de análisis, no asesoría de inversión. Las probabilidades no están calibradas con resultados históricos; las órdenes se ejecutan manualmente en GBM+. Precios BMV con ~15-20 min de retraso; EE. UU. en tiempo real con Finnhub.</footer>
 
+<dialog id="dlgSenal" aria-labelledby="sgTit">
+  <div class="mono small mut" id="sgTipo"></div>
+  <div class="accion" id="sgTit"></div>
+  <div class="ink2" id="sgSub"></div>
+  <dl class="grid" id="sgGrid"></dl>
+  <div class="note" id="sgQue"></div>
+  <div class="small ink2" id="sgEvid"></div>
+  <p class="small mut" id="sgRiesgo"></p>
+  <div class="acts"><button class="pri" id="sgOk">Ya lo ejecuté</button><button id="sgLuego">Recordármelo al cierre</button><button id="sgCerrar">Cerrar</button></div>
+</dialog>
 <dialog id="dlgLogin">
   <form id="fLogin" method="dialog">
     <h2 style="margin-top:0">Acceso</h2>
@@ -229,7 +254,8 @@ function mercadoAbierto() {
 }
 
 // ---------------- cotizaciones en vivo
-const todos = () => [...new Set([...S.cfg.indices, ...S.cfg.activos])];
+const todos = () => [...new Set([...S.cfg.indices, ...S.cfg.activos, ...simbolosEstrategia()])];
+const simbolosEstrategia = () => (S.evid ? [...Object.values(S.evid.mangas).map((m) => m.simbolo), "MXN=X"] : []);
 let pollTimer = null;
 async function refrescar() {
   clearTimeout(pollTimer);
@@ -240,7 +266,7 @@ async function refrescar() {
       const j = await api("/api/quotes?symbols=" + encodeURIComponent(todos().join(",")));
       S.q = { ...S.q, ...j.cotizaciones };
       $("#actTxt").textContent = "Precios " + new Date().toLocaleTimeString("es-MX") + (Object.keys(j.errores || {}).length ? ` · sin datos: ${Object.keys(j.errores).join(", ")}` : "");
-      pintarVivo(); revisarAlertas();
+      pintarVivo(); revisarAlertas(); evaluarEstrategia();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
   pollTimer = setTimeout(refrescar, (abierto ? S.cfg.poll : 300) * 1000);
@@ -529,11 +555,99 @@ $("#fCfg").addEventListener("submit", (ev) => {
 });
 $("#btnSalir").onclick = () => { ls.set("tr_token", ""); S.token = ""; $("#dlgCfg").close(); pedirToken(); };
 
+// ---------------- estrategia validada: filtro de régimen sobre la cartera núcleo
+S.evid = null; S.reg = {}; S.colaModal = []; S.senales = ls.get("tr_senales", {}); S.bitacora = ls.get("tr_bitacora", []);
+async function cargarEvidencia() {
+  try { S.evid = await (await fetch("data/estrategia.json", { cache: "no-store" })).json(); } catch { S.evid = null; }
+  if (!S.evid) { $("#estDesc").textContent = "No se encontró data/estrategia.json (genera la evidencia con python -m backtest.publicar_evidencia)."; return; }
+  const rec = S.evid.recomendada, c = rec.con_regla.completo, b = rec.comprar_y_mantener.completo, v = rec.con_regla.tramo2_validacion, vb = rec.comprar_y_mantener.tramo2_validacion;
+  $("#estFuente").textContent = `${S.evid.periodo.inicio} → ${S.evid.periodo.fin}`;
+  $("#estDesc").textContent = `${rec.cartera}. Regla: mantener cada parte mientras su precio cierre el mes por encima de su media de 200 días; si cierra por debajo, pasar esa parte a CETES. Se decide solo al cierre del último día hábil del mes.`;
+  $("#estEvid").innerHTML = `20 años: <b>${fmt(c.cagr_pct)}% anual</b>, peor caída <b class="g">${fmt(c.max_dd_pct, 1)}%</b> · sin regla: ${fmt(b.cagr_pct)}% anual, peor caída <span class="r">${fmt(b.max_dd_pct, 1)}%</span>. Validación 2016-2026 (no usada para elegir): ${fmt(v.cagr_pct)}% vs ${fmt(vb.cagr_pct)}% sin regla; caída ${fmt(v.max_dd_pct, 1)}% vs ${fmt(vb.max_dd_pct, 1)}%. <span class="mut">Es un seguro: cuesta rendimiento en años buenos y protege en crisis.</span>`;
+  const crisis = Object.keys(rec.con_regla.completo.crisis || {});
+  $("#estDet").innerHTML = `<div class="scroll"><table><thead><tr><th>Crisis</th><th class="num">Con regla</th><th class="num">Sin regla</th></tr></thead><tbody>${crisis.map((k) => `<tr><td>${esc(k)}</td><td class="num g">${fmt(rec.con_regla.completo.crisis[k], 1)}%</td><td class="num r">${fmt(rec.comprar_y_mantener.completo.crisis[k], 1)}%</td></tr>`).join("")}</tbody></table></div>
+    <div class="scroll" style="margin-top:8px"><table><thead><tr><th>Cartera · regla</th><th class="num">20a CAGR</th><th class="num">Caída</th><th class="num">2016-26</th></tr></thead><tbody>${S.evid.tabla.map((f) => `<tr><td>${esc(f.cartera)} · ${esc(f.regla.replace("sma200_", "200d ").replace("comprar_y_mantener", "comprar y mantener"))}</td><td class="num">${fmt(f.completo.cagr_pct)}%</td><td class="num">${fmt(f.completo.max_dd_pct, 1)}%</td><td class="num">${fmt(f.tramo2_validacion.cagr_pct)}%</td></tr>`).join("")}</tbody></table></div>
+    <p class="small mut">Costos ${esc(S.evid.costos_por_lado_pct)}% por operación. Efectivo: ${esc(S.evid.fuentes.tasa_efectivo)}. IPC: ${esc(S.evid.fuentes.ipc)}. ${S.evid.swing_v2 ? `El swing por emisora NO pasó la validación: en 2016-2026 rindió ${fmt(S.evid.swing_v2.tramo2.cagr_pct)}% anual (menos que CETES) con R medio ${fmt(S.evid.swing_v2.tramo2.r_promedio, 3)}. Por eso la watchlist y sus alertas son solo informativas.` : ""}</p>`;
+  pintarBitacora();
+}
+function proximoCierreMes() {
+  const d = new Date(); for (let i = 0; i < 40; i++) { const f = d.toISOString().slice(0, 10); if (d.getUTCDay() % 6 !== 0 && Motor.ultimoHabilDelMes(f)) return f; d.setUTCDate(d.getUTCDate() + 1); } return "—";
+}
+function serieConVivo(sym) {
+  const s = S.series[sym], q = S.q[sym]; if (!s) return null;
+  if (!q || !Number.isFinite(q.price) || !q.time) return s;
+  const dia = new Date(q.time).toLocaleDateString("en-CA", { timeZone: sym.endsWith(".MX") ? "America/Mexico_City" : "America/New_York" });
+  const n = s.t.length; if (s.t[n - 1] !== dia) return s;        // nunca se inventa una vela
+  const c = [...s.c]; c[n - 1] = q.price; return { ...s, c };
+}
+const capital = () => +$("#kCap").value || ls.get("tr_cap", 100000);
+function montoManga(nombre) { return capital() * (S.evid?.recomendada.pesos[nombre] ?? 0); }
+function titulos(nombre, m, r) { const fx = m.simbolo.endsWith(".MX") ? 1 : S.q["MXN=X"]?.price; const px = S.q[m.simbolo]?.price ?? r.precio; return fx ? Math.floor(montoManga(nombre) / (px * fx)) : null; }
+function evaluarEstrategia() {
+  if (!S.evid) return;
+  const abierto = mercadoAbierto();
+  for (const [nombre, m] of Object.entries(S.evid.mangas)) {
+    const s = serieConVivo(m.simbolo); if (!s || s.c.length < 220) continue;
+    const r = Motor.regimen(s, m.regla); S.reg[nombre] = r;
+    let tipo = null;
+    if (r.senal !== "MANTENER" && r.hoy_decide) tipo = abierto ? "preliminar" : "confirmada";
+    else if (r.hoy_decide && abierto && Math.abs(r.distancia_pct) < 1.5) tipo = "cerca";
+    if (tipo && !S.q[m.simbolo]) tipo = null;     // esperar el primer precio en vivo antes de avisar
+    if (tipo) { const k = `${r.fecha}|${nombre}|${tipo}|${r.senal}`; if (!S.senales[k]) { S.senales[k] = Date.now(); ls.set("tr_senales", S.senales); S.colaModal.push({ nombre, m, r, tipo }); } }
+  }
+  pintarEstrategia(); siguienteModal();
+}
+function pintarEstrategia() {
+  if (!S.evid) return;
+  const prox = proximoCierreMes();
+  $("#mangas").innerHTML = Object.entries(S.evid.mangas).map(([nombre, m]) => {
+    const r = S.reg[nombre], q = S.q[m.simbolo];
+    if (!r) return `<div class="manga"><h3>${esc(nombre)}</h3><span class="mut small">Cargando histórico de ${esc(m.simbolo)}…</span></div>`;
+    const est = r.estado === "INVERTIDO" ? `<span class="chip g">● Invertido</span>` : `<span class="chip n">○ En CETES</span>`;
+    const sen = r.senal === "MANTENER" ? `<span class="chip n">Mantener</span>` : r.senal === "COMPRAR" ? `<span class="chip g">▲ Comprar${r.hoy_decide ? "" : ""}</span>` : `<span class="chip r">▼ Vender</span>`;
+    return `<div class="manga"><h3><span>${esc(nombre)}</span><span class="mono small mut">${esc(m.simbolo)}</span></h3>${est} ${sen} ${edadChip(q)}
+      <dl class="kv" style="margin-top:6px"><dt>Precio</dt><dd>${fmt(q?.price ?? r.precio)}</dd><dt>Media 200 días</dt><dd>${fmt(r.sma200)}</dd>
+      <dt>Distancia</dt><dd class="${r.distancia_pct >= 0 ? "g" : "r"}">${pct(r.distancia_pct)}</dd><dt>Próxima decisión</dt><dd>${r.hoy_decide ? "<b class='y'>HOY al cierre</b>" : esc(prox)}</dd>
+      <dt>Monto objetivo</dt><dd>$${fmt(montoManga(nombre), 0)} MXN</dd><dt>Último cambio</dt><dd>${esc(r.ultimo_cambio || "—")}</dd></dl></div>`;
+  }).join("");
+}
+function siguienteModal() {
+  if ($("#dlgSenal").open || !S.colaModal.length) return;
+  const { nombre, m, r, tipo } = S.colaModal.shift(), q = S.q[m.simbolo];
+  const accion = tipo === "cerca" ? (r.estado === "INVERTIDO" ? "VIGILAR: posible VENTA" : "VIGILAR: posible COMPRA") : r.senal;
+  $("#sgTipo").textContent = { preliminar: "SEÑAL PRELIMINAR · se confirma con el cierre de hoy", confirmada: "SEÑAL CONFIRMADA · ejecutar en la próxima apertura", cerca: "ATENCIÓN · hoy se decide al cierre" }[tipo];
+  $("#sgTit").textContent = `${accion} ${nombre}`; $("#sgTit").className = "accion " + (r.senal === "COMPRAR" ? "g" : r.senal === "VENDER" ? "r" : "y");
+  $("#sgSub").textContent = m.como_comprar;
+  const n = titulos(nombre, m, r);
+  $("#sgGrid").innerHTML = [["Precio", `${fmt(q?.price ?? r.precio)} ${q?.currency || ""}`], ["Dato", q ? (q.edadMin <= 3 ? "en vivo" : `${q.edadMin} min de retraso`) : "último cierre"],
+    ["Media 200 días", fmt(r.sma200)], ["Distancia a la media", pct(r.distancia_pct)], ["Monto de esta parte", `$${fmt(montoManga(nombre), 0)} MXN`], ["Títulos aprox.", n != null ? fmt(n, 0) : "—"]]
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
+  $("#sgQue").textContent = tipo === "cerca"
+    ? `Hoy es el último día hábil del mes y el precio está a ${pct(r.distancia_pct)} de su media de 200 días. Revisa 10 minutos antes del cierre: si cierra ${r.estado === "INVERTIDO" ? "por debajo, la señal será VENDER" : "por encima, la señal será COMPRAR"}.`
+    : r.senal === "VENDER"
+      ? `En GBM+: vende tu posición de ${m.simbolo} ${tipo === "preliminar" ? "solo si el cierre de hoy confirma (precio bajo la media)" : "en la apertura de mañana"} y deja ese dinero en CETES o en un fondo de deuda de corto plazo.`
+      : `En GBM+: compra ~${n != null ? fmt(n, 0) : "—"} títulos de ${m.simbolo} (≈ $${fmt(montoManga(nombre), 0)} MXN) ${tipo === "preliminar" ? "solo si el cierre de hoy confirma (precio sobre la media)" : "en la apertura de mañana"}, con orden limitada cercana al precio de apertura.`;
+  const e = m.episodios || {}, fa = m.falsas_alarmas || {}, cr = m.con_regla.completo, bh = m.comprar_y_mantener.completo;
+  $("#sgEvid").innerHTML = `<b>Qué dice la historia (${esc(S.evid.periodo.inicio.slice(0, 4))}-${esc(S.evid.periodo.fin.slice(0, 4))}):</b> esta regla en ${esc(nombre)} rindió ${fmt(cr.cagr_pct)}% anual con peor caída de ${fmt(cr.max_dd_pct, 1)}% (sin regla: ${fmt(bh.cagr_pct)}% y ${fmt(bh.max_dd_pct, 1)}%). ${e.n ? `Hubo ${e.n} periodos invertidos; ${fmt(e.ganadores_pct, 0)}% terminaron con ganancia, con resultado medio de ${pct(e.ret_medio_pct)} y duración media de ${fmt(e.dias_medios, 0)} días.` : ""} En 2008 la caída fue ${fmt(cr.crisis?.["Crisis 2008"], 1)}% con la regla y ${fmt(bh.crisis?.["Crisis 2008"], 1)}% sin ella.`;
+  $("#sgRiesgo").textContent = fa.salidas ? `Riesgo conocido: ${fa.revertidas_menos_3_meses} de ${fa.salidas} salidas (${fmt(fa.pct, 0)}%) se revirtieron en menos de 3 meses (falsas alarmas con costo). La regla protege de caídas largas, no acierta cada movimiento. No es asesoría personalizada.` : "";
+  S.modalActual = { nombre, m, r, tipo, accion };
+  try { $("#dlgSenal").showModal(); avisar([`${accion} ${nombre}`]); } catch {}
+}
+$("#sgOk").onclick = () => { const a = S.modalActual; if (a) { S.bitacora.unshift({ fecha: new Date().toLocaleString("es-MX"), accion: a.accion, parte: a.nombre, simbolo: a.m.simbolo, precio: S.q[a.m.simbolo]?.price ?? a.r.precio, monto: Math.round(montoManga(a.nombre)) }); ls.set("tr_bitacora", S.bitacora.slice(0, 100)); pintarBitacora(); } $("#dlgSenal").close(); };
+$("#sgLuego").onclick = () => { const a = S.modalActual; if (a) { const k = `${a.r.fecha}|${a.nombre}|${a.tipo}|${a.r.senal}`; delete S.senales[k]; ls.set("tr_senales", S.senales); setTimeout(() => evaluarEstrategia(), 30 * 60000); } $("#dlgSenal").close(); };
+$("#sgCerrar").onclick = () => $("#dlgSenal").close();
+$("#dlgSenal").addEventListener("close", () => setTimeout(siguienteModal, 400));
+function pintarBitacora() {
+  $("#bitacora").innerHTML = `<h3 class="small" style="margin:12px 0 4px">Bitácora de ejecuciones</h3>` + (S.bitacora.length ? `<div class="scroll"><table><thead><tr><th>Fecha</th><th>Acción</th><th class="num">Precio</th><th class="num">Monto</th></tr></thead><tbody>${S.bitacora.map((b) => `<tr><td>${esc(b.fecha)}</td><td>${esc(b.accion)} ${esc(b.simbolo)}</td><td class="num">${fmt(b.precio)}</td><td class="num">$${fmt(b.monto, 0)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="small mut">Aún no registras ejecuciones.</p>`);
+}
+
 // ---------------- arranque
 async function arrancar() {
   if (!S.token) return pedirToken();
   try { S.srv = await api("/api/estado"); } catch { return; }
   $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : "Configura ANTHROPIC_API_KEY en Vercel";
+  await cargarEvidencia();
+  cargarSeries(simbolosEstrategia()).then(evaluarEstrategia).catch((e) => showErr("Estrategia: " + e.message));
   const h = ls.get("tr_hist", []);
   if (h.length) S.rep = h[0]; else await cargarWorker(false);
   pintarHist(); render(); refrescar();

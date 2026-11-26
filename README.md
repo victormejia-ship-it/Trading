@@ -25,6 +25,36 @@ la última palabra.
  public/index.html                                  semáforo, watchlist, gráfico, escenarios, calculadora, JSON
 ```
 
+## Estrategia validada con 20 años (2006-2026)
+
+Protocolo: reglas elegidas con 2006-2015 (mejor relación rendimiento/caída) y medidas **una sola vez** con 2016-2026.
+Todo en MXN, costos GBM incluidos y efectivo en CETES (`backtest/cartera_nucleo.py`, `backtest/estrategia_v2.py`).
+
+| Estrategia | 20 años | Peor caída | 2016-2026 (validación) |
+|---|---|---|---|
+| **50% IPC (NAFTRAC) + 50% S&P 500 (SIC), filtro mensual de 200 días** | 9.6% anual | **−20.4%** | 8.2% · caída −19.7% |
+| Lo mismo sin filtro (comprar y mantener) | 11.2% anual | −41.5% | 11.8% · caída −23.0% |
+| Swing por emisora (mejor versión) | — | — | 3.9% anual (menos que CETES) |
+
+- **El filtro es un seguro:** cuesta ~1.6 puntos de rendimiento al año y reduce a la mitad la peor caída (en 2008: −10.9% contra −41.5%).
+- **Falsas alarmas frecuentes:** el 50-73% de las salidas se revirtieron en menos de 3 meses.
+- **El swing de corto plazo no tiene ventaja comprobada:** la web lo muestra solo como información.
+- **La web avisa con ventanas emergentes** el último día hábil de cada mes:
+  - Señal **preliminar** durante la sesión, si el precio cruza la media de 200 días.
+  - Señal **confirmada** tras el cierre.
+  - **Atención** si el precio queda a menos de 1.5% de la media.
+
+  Cada aviso trae su historial de 20 años y una bitácora para registrar lo que ejecutes.
+- **Para regenerar la evidencia:**
+  ```bash
+  python -m backtest.cartera_nucleo
+  ```
+  ```bash
+  python -m backtest.publicar_evidencia
+  ```
+  El segundo comando genera `public/data/estrategia.json`.
+- **Tasas:** FRED no respondió desde GitHub, así que el rendimiento del efectivo usa promedios anuales aproximados de CETES (`data/tasas_cetes_anual_aprox.csv`).
+
 ## Terminal en vivo (web propia en Vercel, plan gratuito)
 
 `public/index.html` + `api/*.js` + `lib/*.js` forman una web con precios en vivo:

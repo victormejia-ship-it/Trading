@@ -14,6 +14,7 @@ Costos 0.34% por lado en cada cambio. Validación: ajuste 2006-2015, validación
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import pathlib
 
@@ -44,7 +45,12 @@ def tasa_diaria(dirp, cal):
             s = pd.read_csv(p, parse_dates=["date"]).set_index("date")["tasa"]
             t = s if t is None else t.combine_first(s)
     if t is None:
-        return pd.Series(0.0, index=cal), "sin dato de tasa: efectivo al 0%"
+        aprox = pathlib.Path("data/tasas_cetes_anual_aprox.csv")
+        if os.environ.get("EFECTIVO_CERO") or not aprox.exists():
+            return pd.Series(0.0, index=cal), "efectivo al 0% (sensibilidad)"
+        a = pd.read_csv(aprox).set_index("anio")["tasa"]
+        anual = pd.Series([a.get(d.year, a.iloc[-1]) for d in cal], index=cal)
+        return (1 + anual / 100) ** (1 / 252) - 1, "CETES 28 días, promedios anuales aproximados (tabla manual; FRED no respondió)"
     t = t.reindex(t.index.union(cal)).ffill().reindex(cal).bfill()
     return (1 + t / 100) ** (1 / 252) - 1, "FRED IR3TIB01MXM156N (México 3 meses) con respaldo INTDSRMXM193N"
 
