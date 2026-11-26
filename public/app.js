@@ -551,6 +551,7 @@ async function cargarPlan() {
   try { S.plan = await (await fetch("data/plan.json", { cache: "no-store" })).json(); } catch { S.plan = null; }
   try { S.retiros = await (await fetch("data/retiros.json", { cache: "no-store" })).json(); } catch { S.retiros = null; }
   try { S.ctx = await (await fetch("data/contexto.json", { cache: "no-store" })).json(); } catch { S.ctx = null; }
+  try { S.mundo = await (await fetch("data/mundo.json", { cache: "no-store" })).json(); } catch { S.mundo = null; }
   pintarContexto();
   if (!S.plan) { $("#planResumen").textContent = "No se encontró data/plan.json."; return; }
   $("#descartados").innerHTML = S.plan.descartados.map((d) => `<li><b>${esc(d.nombre)}:</b> ${esc(d.razon)}</li>`).join("");
@@ -558,7 +559,7 @@ async function cargarPlan() {
   document.querySelectorAll("#pPerfil button").forEach((b) => b.classList.toggle("on", b.dataset.p === S.perfil));
   pintarPlan();
 }
-const simbolosPlan = () => (S.plan ? S.plan.procesos.filter((x) => x.simbolo).map((x) => x.simbolo) : []);
+const simbolosPlan = () => [...(S.plan ? S.plan.procesos.filter((x) => x.simbolo).map((x) => x.simbolo) : []), ...(S.mundo ? Object.keys(S.mundo.mercados) : [])];
 function fechaLarga(f) { try { return new Date(f + "T12:00:00Z").toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }); } catch { return f; } }
 function estadoProceso(p) {
   if (p.tipo === "cetes") return null;
@@ -659,7 +660,7 @@ function evaluarPlan() {
       con_regla: { completo: p.evidencia.todo.con_regla }, comprar_y_mantener: { completo: p.evidencia.todo.sin_regla } };
     S.colaModal.push({ nombre: p.nombre, m, r, tipo });
   }
-  pintarPlan(); siguienteModal();
+  pintarPlan(); pintarMundo(); siguienteModal();
 }
 document.querySelectorAll("#pPerfil button").forEach((b) => (b.onclick = () => { S.perfil = b.dataset.p; ls.set("tr_perfil", S.perfil); document.querySelectorAll("#pPerfil button").forEach((x) => x.classList.toggle("on", x === b)); pintarPlan(); }));
 $("#pCap").value = ls.get("tr_cap", 100000);
@@ -801,6 +802,31 @@ $("#lbGuardarCfg").onclick = () => {
 $("#lbExport").onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ cfg: LB.cfg, ops: LB.ops }, null, 1)], { type: "application/json" })); a.download = `laboratorio-trading-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
 $("#lbImport").onchange = async (e) => { try { const d = JSON.parse(await e.target.files[0].text()); if (Array.isArray(d.ops)) { LB.ops = d.ops; LB.cfg = { ...LB_DEF, ...(d.cfg || {}) }; lbGuardar(); lbCfgEnForm(); pintarLab(); } } catch { $("#lbCalc").textContent = "Archivo de respaldo inválido."; } e.target.value = ""; };
 lbCfgEnForm(); pintarLab();
+
+// ---------------- MERCADOS DEL MUNDO: estado en vivo con la regla validada + evidencia de 20 años (data/mundo.json)
+function pintarMundo() {
+  const M = S.mundo; if (!M) return;
+  const grupos = {}; let sanos = 0, total = 0;
+  for (const [t, m] of Object.entries(M.mercados)) {
+    const s = serieConVivo(t); let r = null;
+    if (s && s.c.length >= 220) r = Motor.regimen(s, M.regla);
+    let cls = "n", est = "Sin datos";
+    if (r) {
+      total++;
+      if (r.estado === "INVERTIDO" && r.distancia_pct >= 0) { cls = "g"; est = "Tendencia sana"; sanos++; }
+      else if (r.estado === "INVERTIDO") { cls = "y"; est = "Vigilar"; }
+      else if (r.distancia_pct > 0) { cls = "b"; est = "Recuperándose"; }
+      else { cls = "r"; est = "Bajo su media"; }
+    }
+    const td = m.tramos.todo; const ev = td ? `Con la regla: ${fmt(td.filtro.cagr_pct, 1)}% al año, caída máx. ${fmt(td.filtro.max_dd_pct, 0)}%. Sin regla: ${fmt(td.comprar_y_mantener.cagr_pct, 1)}% y ${fmt(td.comprar_y_mantener.max_dd_pct, 0)}%. Desde ${m.desde.slice(0, 4)}.` : "Historia corta.";
+    (grupos[m.grupo] ||= []).push(`<div class="mtile k-${cls}"><b>${esc(m.nombre)}</b><span class="est ${cls}">${est}</span>${r ? ` <span class="small mut">${pct(r.distancia_pct)}</span>` : ""}
+      <details><summary>${esc(t)}</summary><span class="small ink2">${esc(ev)}${m.reduce_caida_ambos === false ? " La regla no redujo la caída aquí." : ""}</span></details></div>`);
+  }
+  $("#mundoResumen").textContent = total ? `· ${sanos} de ${total} en tendencia sana` : "";
+  const R = M.resumen, acwi = M.mercados.ACWI?.tramos?.todo;
+  $("#mundoNota").innerHTML = `La regla de 200 días redujo la peor caída en <b>${R.filtro_reduce_caida_en_ambos} de ${R.mercados_con_dos_tramos}</b> mercados en ambos periodos. En pesos, casi todo fuera de EE. UU. rindió 5-8% al año en 20 años.${acwi ? ` Alternativa diversificada al S&P 500: <b>Mundo entero (ACWI)</b>, ${fmt(acwi.filtro.cagr_pct, 1)}% al año con caída de ${fmt(acwi.filtro.max_dd_pct, 0)}% desde 2008.` : ""}`;
+  $("#mundoGrid").innerHTML = Object.entries(grupos).map(([g, tiles]) => `<div class="mgrupo">${esc(g)}</div><div class="mtiles">${tiles.join("")}</div>`).join("");
+}
 
 // ---------------- arranque
 let arrancando = false;

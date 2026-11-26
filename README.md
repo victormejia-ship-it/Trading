@@ -1,5 +1,7 @@
 # Terminal de Riesgo · Trend Timing
 
+> Arquitectura, procesos automáticos y contratos de datos: ver [ARQUITECTURA.md](ARQUITECTURA.md).
+
 App web privada de estado de mercado, timing de tendencias y gestión de riesgo. Los números los calcula un
 motor determinista; Claude interpreta y redacta con salida JSON validada; unos guardrails en código tienen
 la última palabra.

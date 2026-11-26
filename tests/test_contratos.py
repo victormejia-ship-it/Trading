@@ -42,3 +42,11 @@ def test_contexto():
     assert c["actualizado"] and c["puntos"] and c["casas_de_bolsa"]["opciones"]
     for x in c["puntos"]:
         assert x["fuentes"] and all(u.startswith("https://") for u in x["fuentes"])
+
+
+def test_mundo():
+    m = cargar("mundo.json")
+    assert m["regla"] == "sma200_mensual" and len(m["mercados"]) >= 20
+    assert m["resumen"]["filtro_reduce_caida_en_ambos"] <= m["resumen"]["mercados_con_dos_tramos"]
+    for t, x in m["mercados"].items():
+        assert {"nombre", "grupo", "desde", "tramos"} <= set(x), t
