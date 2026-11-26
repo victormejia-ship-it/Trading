@@ -1,0 +1,41 @@
+name: Avisos de fin de mes
+
+# El script solo envía algo el ÚLTIMO día hábil del mes (lo comprueba él mismo).
+# 19:00 UTC = antes del cierre todo el año (aviso preliminar); 21:30 UTC = después del cierre (confirmado).
+# Nota: no se usa día de la semana en cron porque, combinado con día del mes, GitHub lo interpreta como "o".
+on:
+  schedule:
+    - cron: "0 19 25-31 * *"
+    - cron: "30 21 25-31 * *"
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "prueba = mensaje de prueba · forzar = evaluar aunque no sea fin de mes"
+        type: choice
+        options: [prueba, forzar]
+        default: prueba
+
+permissions:
+  contents: read
+
+jobs:
+  avisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Calcular señales y enviar
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          PLAN_CAPITAL: ${{ vars.PLAN_CAPITAL }}
+          PLAN_PERFIL: ${{ vars.PLAN_PERFIL }}
+        run: |
+          if [ "${{ inputs.modo }}" = "prueba" ]; then node scripts/senales.js --prueba;
+          elif [ "${{ inputs.modo }}" = "forzar" ]; then node scripts/senales.js --forzar;
+          else node scripts/senales.js; fi
