@@ -1,0 +1,38 @@
+{
+  "actualizado": "2026-11-26",
+  "nota": "Resumen de noticias públicas. El plan NO cambia sus reglas por pronósticos: el contexto sirve para entender las señales y dimensionar el riesgo.",
+  "puntos": [
+    {"tema": "Bolsa de EE. UU.", "impacto": "negativo",
+     "texto": "Venta fuerte de acciones de inteligencia artificial: el S&P 500 entró en corrección (>10% desde octubre) y el Nasdaq borró su ganancia de 2026.",
+     "para_ti": "Por eso el S&P 500 y el Nasdaq están bajo su media de 200 días: la regla probablemente los pase a CETES el 30 de noviembre.",
+     "fuentes": ["https://www.cnbc.com/2026/11/19/stock-market-today-live-updates.html", "https://fortune.com/2026/11/20/sp-500-correction-panic-selling-ai-selloff-nasdaq-2026-gains-bnp-paribas/"]},
+    {"tema": "Tasas en EE. UU.", "impacto": "negativo",
+     "texto": "La inflación repuntó (PCE ~3.8%) y la Fed discute subir tasas el 9 de diciembre; un gobernador habla de +0.50%.",
+     "para_ti": "Tasas más altas presionan a las acciones de crecimiento (Nasdaq) y suelen fortalecer al dólar.",
+     "fuentes": ["https://www.cnbc.com/2026/11/18/federal-reserve-governor-christopher-waller.html", "https://www.federalreserve.gov/releases/h15/"]},
+    {"tema": "Política en EE. UU.", "impacto": "mixto",
+     "texto": "Los demócratas ganaron el Congreso en las elecciones intermedias: gobierno dividido y temor a más regulación para la IA.",
+     "para_ti": "Más incertidumbre de corto plazo; la historia no muestra un efecto claro de largo plazo.",
+     "fuentes": ["https://www.cnbc.com/2026/11/04/2026-midterm-election-results-live-updates.html"]},
+    {"tema": "Comercio México-EE. UU.", "impacto": "negativo",
+     "texto": "El T-MEC sigue, pero no se extendió en la revisión de julio; la próxima es en julio de 2027. Siguen aranceles a acero, aluminio y autos; México quedó fuera, por ahora, de los nuevos aranceles a 14 países.",
+     "para_ti": "Riesgo para la bolsa mexicana y el peso: por eso el IPC pesa solo 10%.",
+     "fuentes": ["https://www.unotv.com/negocios/mexico-y-ee-uu-mantienen-negociacion-del-t-mec-que-falta-resolver-antes-de-julio-de-2027/", "https://www.elimparcial.com/mexico/2026/11/25/mexico-queda-fuera-por-ahora-de-los-nuevos-aranceles-propuestos-por-estados-unidos-a-14-socios-comerciales/"]},
+    {"tema": "Economía de México", "impacto": "mixto",
+     "texto": "Banxico bajó su tasa a 6.25% (voto dividido) con inflación de ~4%. Crecimiento de ~1.6-1.8% en 2026, peso cerca de 19-19.6 por dólar y riesgo de baja en la calificación por la deuda.",
+     "para_ti": "CETES rinde menos que el promedio de la década (~6.3% contra 7.4%). Un peso débil encarece tu meta en dólares, pero favorece lo que tengas en el SIC.",
+     "fuentes": ["https://www.elfinanciero.com.mx/economia/2026/11/06/contra-todo-pronostico-banxico-recorta-tasa-de-interes-a-625-y-adelanta-larga-permanencia/", "https://expansion.mx/economia/2026/11/03/economia-2026-y-2027-economistas-suben-expectativas", "https://elceo.com/mercados/precio-del-dolar-hoy-23-de-noviembre-de-2026/"]}
+  ],
+  "casas_de_bolsa": {
+    "recomendacion": "GBM+ para los ETFs (S&P 500, Nasdaq, Russell en el SIC y NAFTRAC en la BMV) y Cetesdirecto para CETES.",
+    "opciones": [
+      {"nombre": "GBM+", "veredicto": "Recomendada", "por_que": "Acceso a todo el plan (SIC y BMV), mínimo de $100, sin comisión de custodia. Reseñas de 2026 indican 0% de comisión en operaciones del SIC y la BMV, con un diferencial cambiario de ~0.3-0.5% al comprar en dólares. Confirma la tarifa vigente en su guía de servicios."},
+      {"nombre": "Cetesdirecto", "veredicto": "Recomendada para CETES", "por_que": "Del gobierno, sin comisiones, desde $100. Retención de ISR de 0.90% anual en 2026."},
+      {"nombre": "Bursanet (Actinver)", "veredicto": "Alternativa", "por_que": "Comisiones bajas (0.05-0.25% según las fuentes), también con SIC. Buena opción si prefieres el respaldo de Actinver."},
+      {"nombre": "Kuspit", "veredicto": "No para largo plazo", "por_que": "Cobra ~0.99% anual sobre tu saldo: en 20 años se come una parte importante de la ganancia."},
+      {"nombre": "Broker extranjero (p. ej. Interactive Brokers)", "veredicto": "No recomendado para empezar", "por_que": "En el SIC, la ganancia paga 10% definitivo. En un broker extranjero tributa a tu tasa marginal (hasta 35%) y hay que declarar ingresos del extranjero. Además existe el riesgo de impuesto sucesorio de EE. UU. para no residentes."}
+    ],
+    "impuestos": "SIC y BMV: 10% definitivo sobre la ganancia al vender. CETES: retención de 0.90% anual en 2026. Consulta a un contador para tu caso.",
+    "fuentes": ["https://gbm.com/faqs/que-comisiones-cobran-al-invertir-en-gbm/", "https://www.raisket.mx/mejores-casas-de-bolsa", "https://finantres.mx/gbm-vs-bursanet/", "https://expansion.mx/finanzas-personales/2026/10/19/retiene-sat-por-cada-10-000-pesos-inviertes-en-cetes", "https://www.rankia.mx/blog/como-comenzar-invertir-bolsa/7335308-que-impuestos-pagas-vender-acciones-etfs-mexico"]
+  }
+}

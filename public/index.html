@@ -104,7 +104,11 @@ code{font:13px var(--mono);background:var(--s2);padding:1px 4px;border-radius:3p
 .reglas b{color:var(--ink)}
 .proc details summary{cursor:pointer;font-size:13.5px;color:var(--acc)}
 .espera{font-size:15.5px;margin:14px 0 6px}
+.extras{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px;margin-top:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chips .chip{font-size:13px;padding:3px 9px}
 .avzSum{cursor:pointer;font:600 16px var(--sans);padding-block:16px;list-style:revert;border-top:1px solid var(--line)}
+#repTxt{display:none}
 footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 </style>
 </head>
@@ -131,7 +135,7 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
   <div class="planHead">
     <div>
       <h2 class="planTit">Tu plan de inversión</h2>
-      <p class="lead" id="planResumen">Cargando el plan…</p>
+      <div class="chips" id="planResumen">Cargando el plan…</div>
     </div>
     <div class="planCtl">
       <label class="f">Tu capital (MXN)<input id="pCap" type="number" min="0" step="1000" value="100000" style="width:10em"></label>
@@ -142,6 +146,29 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
   <div class="aviso" id="planAviso"></div>
   <div class="procesos" id="procesos"></div>
   <p class="espera" id="planEspera"></p>
+  <div class="extras">
+    <section class="card" id="meta">
+      <h2>Tu meta: US$1,000 al mes</h2>
+      <div class="big" id="metaK">—</div>
+      <div class="mut small" id="metaKsub"></div>
+      <div class="bar" style="height:12px;margin:10px 0 4px"><span id="metaBar" style="width:0;background:var(--up)"></span></div>
+      <div class="small" id="metaAvance"></div>
+      <label class="f" style="margin-top:10px">Ahorro mensual (MXN)<input id="pAhorro" type="number" min="0" step="500" value="10000"></label>
+      <p class="que" id="metaAnios"></p>
+      <details><summary class="small">Cómo se calculó</summary><p class="small ink2" id="metaNota"></p></details>
+    </section>
+    <section class="card" id="donde">
+      <h2>Dónde invertir</h2>
+      <p class="que" id="dondeRec"></p>
+      <ul class="t small" id="dondeLista"></ul>
+      <details><summary class="small">Impuestos y fuentes</summary><p class="small ink2" id="dondeImp"></p></details>
+    </section>
+    <section class="card" id="contexto">
+      <h2>Contexto hoy <span class="mut small mono" id="ctxFecha"></span></h2>
+      <ul class="t small" id="ctxLista"></ul>
+      <p class="small mut" id="ctxNota"></p>
+    </section>
+  </div>
   <details style="margin-top:6px"><summary class="mono small">Probado durante 20 años y descartado</summary><ul class="t" id="descartados"></ul></details>
   <p class="small mut" id="planNota"></p>
 </section>
@@ -379,8 +406,8 @@ async function refrescar() {
     try {
       const j = await api("/api/quotes?symbols=" + encodeURIComponent(todos().join(",")));
       S.q = { ...S.q, ...j.cotizaciones };
-      const pub = S.estatico && S.generadoEstatico ? ` · publicados por GitHub hace ${Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000))} min (se actualizan cada ~10 min en sesión)` : "";
-      $("#actTxt").textContent = "Precios " + new Date().toLocaleTimeString("es-MX") + pub + (Object.keys(j.errores || {}).length ? ` · sin datos: ${Object.keys(j.errores).join(", ")}` : "");
+      const edad = S.estatico && S.generadoEstatico ? Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000)) : 0;
+      $("#actTxt").textContent = S.estatico ? `Precios de hace ${edad < 60 ? edad + " min" : Math.round(edad / 60) + " h"}` : "Precios " + new Date().toLocaleTimeString("es-MX");
       pintarVivo(); revisarAlertas(); evaluarEstrategia(); evaluarPlan();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
@@ -817,6 +844,9 @@ document.querySelectorAll("#hzTabs button").forEach((b) => (b.onclick = () => { 
 S.plan = null; S.perfil = ls.get("tr_perfil", "moderado"); S.planReg = {};
 async function cargarPlan() {
   try { S.plan = await (await fetch("data/plan.json", { cache: "no-store" })).json(); } catch { S.plan = null; }
+  try { S.retiros = await (await fetch("data/retiros.json", { cache: "no-store" })).json(); } catch { S.retiros = null; }
+  try { S.ctx = await (await fetch("data/contexto.json", { cache: "no-store" })).json(); } catch { S.ctx = null; }
+  pintarContexto();
   if (!S.plan) { $("#planResumen").textContent = "No se encontró data/plan.json."; return; }
   $("#descartados").innerHTML = S.plan.descartados.map((d) => `<li><b>${esc(d.nombre)}:</b> ${esc(d.razon)}</li>`).join("");
   $("#planNota").textContent = `${S.plan.nota} Periodo ${S.plan.periodo.inicio.slice(0, 4)}-${S.plan.periodo.fin.slice(0, 4)}. Herramienta de análisis basada en datos históricos; no garantiza resultados futuros ni es asesoría personalizada.`;
@@ -831,63 +861,81 @@ function estadoProceso(p) {
   const r = Motor.regimen(s, p.regla); S.planReg[p.id] = r; return r;
 }
 function vista(p, r) {
-  const prox = fechaLarga(proximoCierreMes()), dist = r ? pct(r.distancia_pct) : "";
-  if (!r) return { cls: "n", accion: "Cargando…", que: "", nuevo: "" };
-  if (r.senal === "VENDER") return { cls: "r", accion: "VENDER", que: r.hoy_decide && mercadoAbierto() ? "Señal preliminar: si cierra hoy debajo de su media, vende mañana en la apertura." : "Señal confirmada: vende en la próxima apertura y pasa el dinero a CETES.", nuevo: "Si no tienes: no compres." };
-  if (r.senal === "COMPRAR") return { cls: "g", accion: "COMPRAR", que: r.hoy_decide && mercadoAbierto() ? "Señal preliminar: si cierra hoy sobre su media, compra mañana en la apertura." : "Señal confirmada: compra en la próxima apertura.", nuevo: "Si no tienes: compra en la próxima apertura." };
+  const prox = fechaCorta(proximoCierreMes()), dist = r ? pct(r.distancia_pct) : "", prelim = r && r.hoy_decide && mercadoAbierto();
+  if (!r) return { cls: "n", accion: "Cargando…", paso: "" };
+  if (r.senal === "VENDER") return { cls: "r", accion: "VENDER", paso: prelim ? "Vende mañana si hoy cierra así." : "Vende en la próxima apertura." };
+  if (r.senal === "COMPRAR") return { cls: "g", accion: "COMPRAR", paso: prelim ? "Compra mañana si hoy cierra así." : "Compra en la próxima apertura." };
   if (r.estado === "INVERTIDO") return r.distancia_pct >= 0
-    ? { cls: "g", accion: "MANTENER", que: `Tendencia sana: está ${dist} sobre su media de 200 días.`, nuevo: "Si aún no tienes: puedes comprar hoy." }
-    : { cls: "y", accion: "MANTENER · vigilar", que: `Está ${dist} debajo de su media. Si cierra así el ${prox}, la señal será VENDER.`, nuevo: `Si aún no tienes: espera a la decisión del ${prox}.` };
+    ? { cls: "g", accion: "MANTENER", paso: "Si no tienes, puedes comprar hoy.", detalle: `${dist} sobre su media de 200 días.` }
+    : { cls: "y", accion: "VIGILAR", paso: `Se decide el ${prox}.`, detalle: `${dist} bajo su media: si cierra así, VENDER.` };
   return r.distancia_pct > 0
-    ? { cls: "b", accion: "EN PAUSA · vigilar", que: `Ya está ${dist} sobre su media. Si cierra así el ${prox}, la señal será COMPRAR.`, nuevo: `Si aún no tienes: espera a la decisión del ${prox}.` }
-    : { cls: "n", accion: "EN PAUSA", que: `Está ${dist} debajo de su media: este dinero espera en CETES.`, nuevo: "Si aún no tienes: no compres todavía." };
+    ? { cls: "b", accion: "EN PAUSA", paso: `Podría comprarse el ${prox}.`, detalle: `${dist} sobre su media: si cierra así, COMPRAR.` }
+    : { cls: "n", accion: "EN PAUSA", paso: "Espera en CETES.", detalle: `${dist} bajo su media de 200 días.` };
 }
+function fechaCorta(f) { try { return new Date(f + "T12:00:00Z").toLocaleDateString("es-MX", { day: "numeric", month: "short", timeZone: "UTC" }); } catch { return f; } }
 function pintarPlan() {
   if (!S.plan) return;
   const pesos = S.plan.perfiles[S.perfil].pesos, cap = capital();
   const items = S.plan.procesos.filter((p) => (pesos[p.id] ?? 0) > 0);
-  let enPausa = 0; const comprarHoy = [], esperar = [], vender = [], pausa = [];
+  let enPausa = 0; const grupos = { comprar: [], vigilar: [], vender: [], pausa: [] };
   const tarjetas = items.map((p) => {
     const r = estadoProceso(p), w = pesos[p.id], monto = cap * w;
-    if (p.tipo === "cetes") return { p, r, w, monto };
+    if (p.tipo === "cetes") return { p, w, monto };
     const v = vista(p, r);
-    if (r && (r.estado === "EFECTIVO" && r.senal !== "COMPRAR")) enPausa += monto;
-    if (r && r.senal === "VENDER") vender.push(p.nombre);
-    else if (v.nuevo.startsWith("Si aún no tienes: puedes") || r?.senal === "COMPRAR") comprarHoy.push(p.nombre);
-    else if (r && v.accion === "EN PAUSA") pausa.push(p.nombre);
-    else if (r) esperar.push(p.nombre);
+    if (r && r.estado === "EFECTIVO" && r.senal !== "COMPRAR") enPausa += monto;
+    if (v.accion === "VENDER") grupos.vender.push(p.nombre);
+    else if (v.accion === "COMPRAR" || v.paso.startsWith("Si no tienes")) grupos.comprar.push(p.nombre);
+    else if (v.accion === "VIGILAR" || v.cls === "b") grupos.vigilar.push(p.nombre);
+    else if (r) grupos.pausa.push(p.nombre);
     return { p, r, w, monto, v };
   });
+  const plazoCorto = (x) => x.split(" (")[0];
   $("#procesos").innerHTML = tarjetas.map(({ p, r, w, monto, v }) => {
-    const ev = p.evidencia.todo.con_regla, sin = p.evidencia.todo.sin_regla;
     if (p.tipo === "cetes") {
-      const total = monto + enPausa;
-      return `<div class="proc k-g"><div class="tags"><span>${esc(p.plazo)}</span><span>${esc(p.rol)}</span></div><h3>${esc(p.nombre)}</h3>
-        <div class="accion g">MANTENER</div><div class="monto">$${fmt(total, 0)} MXN</div>
-        <p class="que">${fmt(w * 100, 0)}% de colchón${enPausa ? ` + $${fmt(enPausa, 0)} de índices en pausa` : ""}. Rinde ~${fmt(p.evidencia.t2.con_regla.cagr_pct, 1)}% al año sin caídas (promedio 2016-2026).</p>
-        <p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p><p class="small mut">${esc(p.como)}</p></div>`;
+      return `<div class="proc k-g"><div class="tags"><span>${esc(plazoCorto(p.plazo))}</span><span>${fmt(w * 100, 0)}%</span></div><h3>${esc(p.nombre)}</h3>
+        <div class="accion g">MANTENER</div><div class="monto">$${fmt(monto + enPausa, 0)}</div>
+        <p class="que">Colchón${enPausa ? " + índices en pausa" : ""}. ~${fmt(p.evidencia.t2.con_regla.cagr_pct, 1)}% al año, sin caídas.</p>
+        <details><summary>Reglas y evidencia</summary><p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p><p class="small mut">${esc(p.como)}</p></details></div>`;
     }
-    const q = S.q[p.simbolo];
-    return `<div class="proc k-${v.cls}"><div class="tags"><span>${esc(p.plazo)}</span><span>${esc(p.rol)}</span></div><h3>${esc(p.nombre)}</h3>
-      <div class="accion ${v.cls}">${esc(v.accion)}</div><div class="monto">$${fmt(monto, 0)} MXN · ${fmt(w * 100, 0)}% de tu capital</div>
-      <p class="que">${esc(v.que)}</p><p class="que"><b>${esc(v.nuevo)}</b></p>
-      <p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p>
-      <p class="small mut">${esc(p.como)}${q ? ` · precio ${fmt(q.price)} ${q.currency || ""}${q.edadMin > 3 ? ` (hace ${q.edadMin} min)` : ""}` : ""}</p>
-      <details><summary>¿Por qué confiar en esta regla?</summary><p class="small ink2">En 20 años, con la regla: <b>${fmt(ev.cagr_pct, 1)}% al año</b> y peor caída de <b>${fmt(ev.max_dd_pct, 0)}%</b>. Sin la regla: ${fmt(sin.cagr_pct, 1)}% al año y caída de ${fmt(sin.max_dd_pct, 0)}%. ${ev.crisis?.["Crisis 2008"] != null ? `En 2008: ${fmt(ev.crisis["Crisis 2008"], 0)}% con la regla contra ${fmt(sin.crisis["Crisis 2008"], 0)}% sin ella.` : ""} Validación 2016-2026: ${fmt(p.evidencia.t2.con_regla.cagr_pct, 1)}% al año (sin regla ${fmt(p.evidencia.t2.sin_regla.cagr_pct, 1)}%). ${p.falsas_alarmas ? `Ojo: ${fmt(p.falsas_alarmas.pct, 0)}% de sus salidas fueron falsas alarmas (se revirtieron en menos de 3 meses).` : ""}</p></details></div>`;
+    const ev = p.evidencia.todo.con_regla, sin = p.evidencia.todo.sin_regla, q = S.q[p.simbolo];
+    return `<div class="proc k-${v.cls}"><div class="tags"><span>${esc(plazoCorto(p.plazo))}</span><span>${fmt(w * 100, 0)}%</span></div><h3>${esc(p.nombre)}</h3>
+      <div class="accion ${v.cls}">${esc(v.accion)}</div><div class="monto">$${fmt(monto, 0)}</div>
+      <p class="que"><b>${esc(v.paso)}</b></p>
+      <details><summary>Reglas y evidencia</summary>
+        ${v.detalle ? `<p class="small">${esc(v.detalle)}</p>` : ""}
+        <p class="reglas"><b>Compra:</b> ${esc(p.compra)}<br><b>Vende:</b> ${esc(p.venta)}</p>
+        <p class="small ink2">20 años con la regla: <b>${fmt(ev.cagr_pct, 1)}% al año</b>, peor caída ${fmt(ev.max_dd_pct, 0)}% (sin regla: ${fmt(sin.cagr_pct, 1)}% y ${fmt(sin.max_dd_pct, 0)}%).${p.falsas_alarmas ? ` Falsas alarmas: ${fmt(p.falsas_alarmas.pct, 0)}% de las salidas.` : ""}</p>
+        <p class="small mut">${esc(p.como)}${q ? ` · ${fmt(q.price)} ${q.currency || ""}` : ""}</p></details></div>`;
   }).join("");
-  const pf = S.plan.perfiles[S.perfil], cf = pf.con_filtro.todo, sf = pf.sin_filtro.todo;
-  const nombre = { conservador: "Conservador", moderado: "Moderado", agresivo: "Agresivo" }[S.perfil];
-  $("#planResumen").innerHTML = `Con <b>$${fmt(cap, 0)} MXN</b> y perfil <b>${nombre}</b>: `
-    + (vender.length ? `<b class="r">vende ${esc(vender.join(" y "))}</b>; ` : "")
-    + (comprarHoy.length ? `<b class="g">puedes comprar hoy ${esc(comprarHoy.join(", "))}</b>; ` : "")
-    + (esperar.length ? `<b class="y">vigila ${esc(esperar.join(", "))} hasta la decisión de fin de mes</b>; ` : "")
-    + (pausa.length ? `${esc(pausa.join(", "))} sigue${pausa.length > 1 ? "n" : ""} en pausa; ` : "")
-    + `el resto queda en CETES. Cada índice se revisa solo una vez al mes.`;
+  const ch = (cls, txt) => `<span class="chip ${cls}">${txt}</span>`;
+  $("#planResumen").innerHTML = (grupos.vender.length ? ch("r", "▼ Vender: " + esc(grupos.vender.join(", "))) : "")
+    + (grupos.comprar.length ? ch("g", "● Comprar: " + esc(grupos.comprar.join(", "))) : "")
+    + (grupos.vigilar.length ? ch("y", "◷ Vigilar: " + esc(grupos.vigilar.join(", "))) : "")
+    + (grupos.pausa.length ? ch("n", "○ En pausa: " + esc(grupos.pausa.join(", "))) : "")
+    + ch("g", `CETES: $${fmt(cap * (pesos.CETES || 0) + enPausa, 0)}`);
   const prox = proximoCierreMes(), hoy = new Date().toISOString().slice(0, 10);
   $("#planAviso").innerHTML = prox === hoy || Object.values(S.planReg).some((r) => r.hoy_decide)
-    ? `<b>Hoy se decide.</b> Revisa esta página 10-15 minutos antes del cierre (15:00 CDMX). Si algún índice cruza su media, aparecerá una ventana con la instrucción.`
-    : `<b>Próxima decisión: ${esc(fechaLarga(prox))}, al cierre (15:00 CDMX).</b> Hasta entonces no tienes que hacer nada, salvo comprar lo que dice «puedes comprar hoy» si aún no lo tienes.`;
-  $("#planEspera").innerHTML = `Qué esperar con el perfil ${nombre} (20 años, con las reglas): <b>~${fmt(cf.cagr_pct, 1)}% al año</b>, con una peor caída de <b>${fmt(cf.max_dd_pct, 0)}%</b>${cf.crisis?.["Crisis 2008"] != null ? ` (en 2008: ${fmt(cf.crisis["Crisis 2008"], 0)}%)` : ""}. Sin las reglas habría sido ${fmt(sf.cagr_pct, 1)}% al año, pero con caídas de hasta ${fmt(sf.max_dd_pct, 0)}%.`;
+    ? `<b>Hoy se decide</b> · revisa antes de las 15:00 (CDMX). Si algo cambia, aparecerá un aviso.`
+    : `<b>Próxima decisión: ${esc(fechaLarga(prox))}</b> · 15:00 CDMX. Mientras, no tienes que hacer nada.`;
+  const pf = S.plan.perfiles[S.perfil], cf = pf.con_filtro.todo, sf = pf.sin_filtro.todo;
+  $("#planEspera").innerHTML = `<b>${{ conservador: "Conservador", moderado: "Moderado", agresivo: "Agresivo" }[S.perfil]}</b>, en 20 años: <b>~${fmt(cf.cagr_pct, 1)}% al año</b> · peor caída <b>${fmt(cf.max_dd_pct, 0)}%</b> <span class="mut">(sin reglas: ${fmt(sf.cagr_pct, 1)}% y ${fmt(sf.max_dd_pct, 0)}%)</span>`;
+  pintarMeta();
+}
+// ---------------- meta: US$1,000 al mes (data/retiros.json)
+function pintarMeta() {
+  const R = S.retiros; if (!R) return;
+  const pr = R.perfiles[S.perfil]?.sma200_mensual; if (!pr) return;
+  const fx = S.q["MXN=X"]?.price || R.supuestos.tipo_cambio_hoy, esc2 = fx / R.supuestos.tipo_cambio_hoy;
+  const K = pr.renta_perpetua.mediana_mxn * esc2, Kpeor = pr.renta_perpetua.peor_mxn * esc2, K10 = pr.no_se_acaba.peor_mxn * esc2;
+  const cap = capital(), av = Math.min(100, (100 * cap) / K);
+  $("#metaK").textContent = `$${fmt(K / 1e6, 1)} millones`;
+  $("#metaKsub").textContent = `para una renta para siempre (caso típico) · peor caso $${fmt(Kpeor / 1e6, 1)} M · solo 10 años: $${fmt(K10 / 1e6, 1)} M`;
+  $("#metaBar").style.width = av + "%";
+  $("#metaAvance").innerHTML = `Llevas <b>${fmt(av, 0)}%</b>. Hoy tu capital daría ~<b>US$${fmt((1000 * cap) / K, 0)} al mes</b> sostenibles.`;
+  const ah = +$("#pAhorro").value || 0, r = Math.max(0.01, (S.plan.perfiles[S.perfil].con_filtro.todo.cagr_pct - 3) / 100) / 12;
+  let v = cap, m = 0; while (v < K && m < 600) { v = v * (1 + r) + ah; m++; }
+  $("#metaAnios").innerHTML = m >= 600 ? "Con ese ahorro no se alcanza en 50 años: aumenta el ahorro mensual." : `Ahorrando $${fmt(ah, 0)} al mes llegas en <b>~${fmt(m / 12, 1)} años</b>.`;
+  $("#metaNota").textContent = `Retiros de US$1,000 al tipo de cambio real de cada mes, probando cada mes de arranque entre 2006 y 2016 (incluye empezar justo antes de 2008), con 1% anual de impuestos y comisiones, conservando el valor real (inflación de 4%). La proyección de ahorro usa el rendimiento histórico del perfil menos 3 puntos, por prudencia. Pasado no garantiza futuro.`;
 }
 function evaluarPlan() {
   if (!S.plan) return;
@@ -913,6 +961,22 @@ $("#pCap").value = ls.get("tr_cap", 100000);
 $("#pCap").addEventListener("input", () => { ls.set("tr_cap", +$("#pCap").value || 0); $("#kCap").value = $("#pCap").value; pintarPlan(); pintarEstrategia(); });
 // mover controles técnicos a la terminal avanzada para que el encabezado quede limpio
 ["#hist", "#btnMotor", "#btnClaude", "#btnStop"].forEach((id) => $("#avzBar").append($(id)));
+
+function pintarContexto() {
+  const C = S.ctx; if (!C) return;
+  const col = { negativo: "r", positivo: "g", mixto: "y" };
+  const link = (u) => (safeUrl(u) ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(new URL(u).hostname.replace("www.", ""))}</a>` : "");
+  $("#ctxFecha").textContent = new Date(C.actualizado + "T12:00:00Z").toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  $("#ctxLista").innerHTML = C.puntos.map((x) => `<li><span class="chip ${col[x.impacto] || "n"}">${esc(x.tema)}</span> ${esc(x.para_ti)}
+    <details><summary class="small">Qué pasó</summary><span class="ink2">${esc(x.texto)}</span> ${x.fuentes.map(link).join(" · ")}</details></li>`).join("");
+  $("#ctxNota").textContent = C.nota;
+  const B = C.casas_de_bolsa, vcol = (v) => (v.startsWith("Recomendada") ? "g" : v.startsWith("Alternativa") ? "b" : "n");
+  $("#dondeRec").innerHTML = `<b>${esc(B.recomendacion)}</b>`;
+  $("#dondeLista").innerHTML = B.opciones.map((o) => `<li><b>${esc(o.nombre)}</b> <span class="chip ${vcol(o.veredicto)}">${esc(o.veredicto)}</span><details><summary class="small">Por qué</summary><span class="ink2">${esc(o.por_que)}</span></details></li>`).join("");
+  $("#dondeImp").innerHTML = esc(B.impuestos) + "<br>" + B.fuentes.map(link).join(" · ");
+}
+$("#pAhorro").value = ls.get("tr_ahorro", 10000);
+$("#pAhorro").addEventListener("input", () => { ls.set("tr_ahorro", +$("#pAhorro").value || 0); pintarMeta(); });
 
 // ---------------- arranque
 let arrancando = false;
