@@ -1,0 +1,6 @@
+{
+  "nota": "Universo de investigación: emisoras líquidas operables en GBM+ (SIC y BMV). Elegidas hoy: tiene sesgo de supervivencia.",
+  "indices": ["SPY", "QQQ", "IWM", "^VIX", "^MXX", "MXN=X", "TLT", "HYG"],
+  "sic": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "AVGO", "JPM", "XOM", "UNH", "COST", "LLY"],
+  "bmv": ["WALMEX.MX", "GFNORTEO.MX", "AMXB.MX", "FEMSAUBD.MX", "CEMEXCPO.MX", "GMEXICOB.MX", "BIMBOA.MX", "GAPB.MX", "ASURB.MX", "OMAB.MX", "KOFUBL.MX", "AC.MX", "ORBIA.MX"]
+}

@@ -7,6 +7,7 @@ on:
       - "backtest/**"
       - "trend_risk/**"
       - "watchlist.json"
+      - "data/historico/.solicitar"
       - ".github/workflows/backtest.yml"
 
 permissions:
@@ -28,13 +29,15 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: python -m pytest -q tests
+      - name: Descargar histórico para investigación
+        run: python -m backtest.descargar data/historico
       - name: Backtest con datos reales (yfinance, 4 años de historia, 2 de prueba)
         run: python -m backtest.run_backtest --out reports/backtest
       - name: Publicar resultado
         run: |
           git config user.name "analisis-bot"
           git config user.email "analisis-bot@users.noreply.github.com"
-          git add reports/backtest
+          git add reports/backtest data/historico
           git diff --cached --quiet || git commit -m "data: backtest $(date -u +%F)"
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
           git push
