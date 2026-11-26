@@ -1,0 +1,22 @@
+{
+  "hosting": {
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/api/**", "function": { "functionId": "api", "region": "us-central1" } }
+    ],
+    "headers": [
+      { "source": "/api/**", "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
+      { "source": "**/*.json", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  },
+  "functions": [
+    {
+      "source": ".",
+      "codebase": "default",
+      "runtime": "nodejs20",
+      "ignore": ["node_modules", ".git", ".github", "data", "reports", "backtest", "worker", "trend_risk", "tests", "supabase", "web",
+                 "scripts", "public/data", "public/index.html", "**/*.py", "requirements.txt", "*.md", "firebase-debug.log", ".vercel", ".firebase"]
+    }
+  ]
+}

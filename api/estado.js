@@ -1,6 +1,6 @@
 // Qué está configurado (sin revelar claves).
 const { proteger } = require("../lib/auth");
-const { MODEL, EFFORT } = require("../lib/claude");
+const { MODEL, EFFORT, claudeConfigurado } = require("../lib/claude");
 module.exports = proteger(async (req, res) => {
-  res.json({ claude: !!process.env.ANTHROPIC_API_KEY, finnhub: !!process.env.FINNHUB_API_KEY, modelo: MODEL, effort: EFFORT });
+  res.json({ claude: claudeConfigurado(), finnhub: /^[a-z0-9]{10,}$/i.test(process.env.FINNHUB_API_KEY || ""), modelo: MODEL, effort: EFFORT });
 });

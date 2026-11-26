@@ -55,6 +55,40 @@ Todo en MXN, costos GBM incluidos y efectivo en CETES (`backtest/cartera_nucleo.
   El segundo comando genera `public/data/estrategia.json`.
 - **Tasas:** FRED no respondió desde GitHub, así que el rendimiento del efectivo usa promedios anuales aproximados de CETES (`data/tasas_cetes_anual_aprox.csv`).
 
+## Publicar en Firebase (recomendado si ya usas Firebase)
+
+- **Página:** Firebase Hosting sirve `public/`.
+- **Servidor:** una Cloud Function `api` (`firebase.js`) reutiliza los manejadores de `api/*.js`. Los precios en vivo y Claude salen de ahí.
+- **Acceso:** con tu cuenta de Google (Firebase Auth), solo para los correos de `ALLOWED_EMAILS`.
+- **Secretos:** `FINNHUB_API_KEY` y `ANTHROPIC_API_KEY` viven en Secret Manager, nunca en el repo (que es público).
+
+**Requisitos:** plan **Blaze** (tarjeta; con este uso, normalmente $0 o centavos al mes; pon una alerta de presupuesto) y Node.js 20+.
+
+```bash
+npm install -g firebase-tools
+```
+```bash
+firebase login
+```
+```bash
+firebase use --add
+```
+```bash
+firebase functions:secrets:set FINNHUB_API_KEY
+```
+```bash
+firebase functions:secrets:set ANTHROPIC_API_KEY
+```
+(Si no tienes clave de Claude, escribe `ninguna`.)
+```bash
+npm install
+```
+```bash
+firebase deploy
+```
+En el primer despliegue se te pedirá `ALLOWED_EMAILS` (tus correos de Google autorizados, separados por coma).
+Antes, en la consola de Firebase: *Authentication → Sign-in method → Google → Habilitar*.
+
 ## Terminal en vivo (web propia en Vercel, plan gratuito)
 
 `public/index.html` + `api/*.js` + `lib/*.js` forman una web con precios en vivo:

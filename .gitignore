@@ -5,3 +5,7 @@ reportes/
 .env
 node_modules/
 .vercel/
+.firebase/
+firebase-debug.log
+.env.*
+!.env.example

@@ -5,7 +5,7 @@ const claude = require("../lib/claude");
 const Motor = require("../public/engine.js");
 const { lista } = require("./quotes");
 
-const usarClaude = (body) => body.claude === true && !!process.env.ANTHROPIC_API_KEY;
+const usarClaude = (body) => body.claude === true && claude.claudeConfigurado();
 
 async function serieViva(sym) {
   const { serie, meta } = await mk.historico(sym);

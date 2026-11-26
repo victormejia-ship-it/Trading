@@ -197,10 +197,13 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
 <dialog id="dlgLogin">
   <form id="fLogin" method="dialog">
     <h2 style="margin-top:0">Acceso</h2>
-    <p class="small ink2">Escribe el token que configuraste en Vercel como <code>APP_TOKEN</code>. Se guarda solo en este navegador.</p>
-    <input id="tok" type="password" autocomplete="current-password" style="width:100%" required>
+    <div id="loginToken">
+      <p class="small ink2">Escribe el token que configuraste como <code>APP_TOKEN</code>. Se guarda solo en este navegador.</p>
+      <input id="tok" type="password" autocomplete="current-password" style="width:100%">
+    </div>
+    <div id="loginGoogle" hidden><p class="small ink2">Entra con tu cuenta de Google autorizada.</p></div>
     <p class="small r" id="tokErr"></p>
-    <div class="acts"><button class="pri" value="ok">Entrar</button></div>
+    <div class="acts"><button class="pri" value="ok" id="btnEntrar">Entrar</button><button type="button" class="pri" id="btnGoogle" hidden>Entrar con Google</button></div>
   </form>
 </dialog>
 <dialog id="dlgCfg">
@@ -236,15 +239,38 @@ const DEF = { indices: ["SPY", "QQQ", "IWM", "^VIX", "^MXX", "MXN=X", "TLT"], ac
 const S = { cfg: { ...DEF, ...ls.get("tr_cfg", {}) }, token: ls.get("tr_token", ""), srv: null, q: {}, series: {}, rep: null, sel: null, jsonTab: "analisis", abort: null, alertas: ls.get("tr_alertas", {}) };
 
 // ---------------- API
+// ---------------- acceso: Google (Firebase) o token (Vercel/local)
+S.fb = null;
+function cargarScript(src) { return new Promise((ok, mal) => { const e = document.createElement("script"); e.src = src; e.onload = ok; e.onerror = mal; document.head.append(e); }); }
+async function detectarFirebase() {
+  try {
+    const r = await fetch("/__/firebase/init.json", { cache: "no-store" });
+    if (!r.ok || !(r.headers.get("content-type") || "").includes("json")) return false;
+    const cfg = await r.json();
+    await cargarScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
+    await cargarScript("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js");
+    firebase.initializeApp(cfg);
+    S.fb = { auth: firebase.auth(), user: null };
+    $("#loginToken").hidden = true; $("#btnEntrar").hidden = true; $("#loginGoogle").hidden = false; $("#btnGoogle").hidden = false;
+    S.fb.auth.onAuthStateChanged((u) => { S.fb.user = u; if (u) { if ($("#dlgLogin").open) $("#dlgLogin").close(); arrancar(); } else pedirToken(); });
+    return true;
+  } catch { return false; }
+}
+$("#btnGoogle").onclick = async () => {
+  try { await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch (e) { $("#tokErr").textContent = "No se pudo iniciar sesión: " + (e.message || e.code); }
+};
+async function tokenActual() { return S.fb ? (S.fb.user ? await S.fb.user.getIdToken() : "") : S.token; }
+
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + S.token, ...(opts.headers || {}) } });
-  if (r.status === 401 || r.status === 503) { const j = await r.json().catch(() => ({})); pedirToken(j.error); throw new Error(j.error || "No autorizado"); }
+  const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await tokenActual()), ...(opts.headers || {}) } });
+  if (r.status === 401 || r.status === 403 || r.status === 503) { const j = await r.json().catch(() => ({})); pedirToken(j.error); throw new Error(j.error || "No autorizado"); }
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
   return j;
 }
 function pedirToken(msg) { $("#tokErr").textContent = msg || ""; if (!$("#dlgLogin").open) $("#dlgLogin").showModal(); }
-$("#fLogin").addEventListener("submit", () => { S.token = $("#tok").value.trim(); ls.set("tr_token", S.token); arrancar(); });
+$("#fLogin").addEventListener("submit", (ev) => { if (S.fb) { ev.preventDefault(); return; } S.token = $("#tok").value.trim(); ls.set("tr_token", S.token); arrancar(); });
 
 // ---------------- horario de mercado (NYSE; BMV abre a la misma hora casi todo el año)
 function mercadoAbierto() {
@@ -553,7 +579,7 @@ $("#fCfg").addEventListener("submit", (ev) => {
   S.cfg = { indices: lista($("#cIdx").value), activos: lista($("#cAct").value), riesgo: Math.min(5, Math.max(0.1, +$("#cRisk").value || 1)), maxPos: Math.min(100, Math.max(1, +$("#cMax").value || 25)), poll: Math.min(300, Math.max(10, +$("#cPoll").value || 15)) };
   ls.set("tr_cfg", S.cfg); renderWatch(); refrescar();
 });
-$("#btnSalir").onclick = () => { ls.set("tr_token", ""); S.token = ""; $("#dlgCfg").close(); pedirToken(); };
+$("#btnSalir").onclick = async () => { ls.set("tr_token", ""); S.token = ""; $("#dlgCfg").close(); if (S.fb) await S.fb.auth.signOut(); else pedirToken(); };
 
 // ---------------- estrategia validada: filtro de régimen sobre la cartera núcleo
 S.evid = null; S.reg = {}; S.colaModal = []; S.senales = ls.get("tr_senales", {}); S.bitacora = ls.get("tr_bitacora", []);
@@ -642,17 +668,20 @@ function pintarBitacora() {
 }
 
 // ---------------- arranque
+let arrancando = false;
 async function arrancar() {
-  if (!S.token) return pedirToken();
-  try { S.srv = await api("/api/estado"); } catch { return; }
+  if (S.fb ? !S.fb.user : !S.token) return pedirToken();
+  if (arrancando) return; arrancando = true;
+  try { S.srv = await api("/api/estado"); } catch { arrancando = false; return; }
   $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : "Configura ANTHROPIC_API_KEY en Vercel";
   await cargarEvidencia();
   cargarSeries(simbolosEstrategia()).then(evaluarEstrategia).catch((e) => showErr("Estrategia: " + e.message));
   const h = ls.get("tr_hist", []);
   if (h.length) S.rep = h[0]; else await cargarWorker(false);
-  pintarHist(); render(); refrescar();
+  pintarHist(); render(); refrescar(); arrancando = false;
 }
-render(); arrancar();
+render();
+detectarFirebase().then((fb) => { if (!fb) arrancar(); });
 }
 </script>
 </body>

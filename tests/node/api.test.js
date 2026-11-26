@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 
 process.env.APP_TOKEN = "secreto-prueba";
-process.env.ANTHROPIC_API_KEY = "sk-falsa";
+process.env.ANTHROPIC_API_KEY = "sk-ant-falsa";
 delete process.env.FINNHUB_API_KEY;
 
 // --- Yahoo simulado a partir de los CSV de prueba
@@ -92,4 +92,28 @@ test("si Claude falla, responde el motor determinista con el error visible", asy
   const out = await analyze._interno.activo({ ticker: "MSFT", claude: true });
   assert.equal(out.analisis.fuente, "MOTOR_DETERMINISTA");
   assert.match(out.analisis.error_llm, /timeout simulado/);
+});
+
+test("modo Firebase: solo correos autorizados con token de Google válido", async () => {
+  const auth = require("../../lib/auth");
+  process.env.AUTH_MODE = "firebase"; process.env.ALLOWED_EMAILS = "yo@ejemplo.com, socio@ejemplo.com";
+  auth._setVerificador(async (t) => {
+    if (t === "bueno") return { email: "Yo@Ejemplo.com", email_verified: true };
+    if (t === "otro") return { email: "intruso@ejemplo.com", email_verified: true };
+    if (t === "sinverificar") return { email: "yo@ejemplo.com", email_verified: false };
+    throw new Error("token inválido");
+  });
+  const r = (tok) => auth.autorizado({ headers: tok ? { authorization: "Bearer " + tok } : {} });
+  assert.equal((await r("bueno")).ok, true);
+  assert.equal((await r("otro")).status, 403);
+  assert.equal((await r("sinverificar")).status, 403);
+  assert.equal((await r("basura")).status, 401);
+  assert.equal((await r("")).status, 401);
+  process.env.ALLOWED_EMAILS = ""; assert.equal((await r("bueno")).status, 503);
+  delete process.env.AUTH_MODE; auth._setVerificador(null);
+});
+
+test("entrada de Firebase enruta /api/<nombre> a los mismos manejadores", async () => {
+  const f = require("../../firebase.js");
+  assert.equal(typeof f.api, "function");
 });

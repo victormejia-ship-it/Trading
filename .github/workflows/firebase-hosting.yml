@@ -1,0 +1,26 @@
+name: Publicar en Firebase Hosting
+
+# Opcional: se activa solo si existen el secreto FIREBASE_SERVICE_ACCOUNT y la variable FIREBASE_PROJECT_ID.
+# Publica public/ (página y datos diarios). Las funciones se despliegan a mano con `firebase deploy --only functions`.
+on:
+  push:
+    paths:
+      - "public/**"
+  workflow_dispatch:
+
+jobs:
+  hosting:
+    runs-on: ubuntu-latest
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      PROYECTO: ${{ vars.FIREBASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.SA != '' && env.PROYECTO != ''
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        if: env.SA != '' && env.PROYECTO != ''
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: ${{ vars.FIREBASE_PROJECT_ID }}
+          channelId: live
