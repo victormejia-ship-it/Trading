@@ -1,14 +1,11 @@
 name: Backtest 2 años
 
 on:
+  # Solo manual (Actions → Backtest 2 años → Run workflow) o al pedir datos nuevos
   workflow_dispatch:
   push:
     paths:
-      - "backtest/**"
-      - "trend_risk/**"
-      - "watchlist.json"
       - "data/historico/.solicitar"
-      - ".github/workflows/backtest.yml"
 
 permissions:
   contents: write
