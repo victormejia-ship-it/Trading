@@ -25,6 +25,16 @@ la última palabra.
  public/index.html                                  semáforo, watchlist, gráfico, escenarios, calculadora, JSON
 ```
 
+## Versión web en claude.ai (como tus otros proyectos)
+
+`web/index.html` + `web/engine.js` se publican como página de claude.ai:
+https://claude.ai/artifact/LZSrR67PKiE26iqqR9mtz5
+
+- **Motor determinista en el navegador** (`web/engine.js`): da los mismos resultados que `trend_risk/`, comprobado con 16 series de prueba.
+- **Claude con tu cuenta de claude.ai**: no hace falta clave de API. Las mismas reglas anti-alucinación y los mismos guardrails, en JavaScript.
+- **Historial** en la base de datos de la página. Solo tú (o tus editores) pueden escribir.
+- **Datos**: la página no puede descargar de internet. Sube CSV de Yahoo/Stooq, importa el `latest.json` del worker o pega titulares.
+
 ## Medidas anti-alucinación
 
 | Medida | Dónde |

@@ -36,7 +36,12 @@ def validar_mercado(llm: dict, mercado: dict) -> dict:
         sem = "ROJO_NO_COMPRAR"
     if sem == "ROJO_NO_COMPRAR":
         exp = min(exp, 25)
-    return {**llm, "semaforo": sem, "exposicion_maxima_pct": exp, "correcciones_guardrail": corr}
+    reg = llm.get("regimen", "NEUTRAL")
+    if sem == "ROJO_NO_COMPRAR" and reg != "RISK_OFF":
+        corr.append(f"Régimen {reg} incoherente con ROJO -> RISK_OFF"); reg = "RISK_OFF"
+    if sem == "AMARILLO_CAUTELA" and reg == "RISK_ON":
+        corr.append("Régimen RISK_ON incoherente con AMARILLO -> NEUTRAL"); reg = "NEUTRAL"
+    return {**llm, "semaforo": sem, "regimen": reg, "exposicion_maxima_pct": exp, "correcciones_guardrail": corr}
 
 
 def validar_activo(llm: dict, snap: dict, estado_mercado: dict, ids_noticias: set[str]) -> dict:
