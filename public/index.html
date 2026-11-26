@@ -260,9 +260,44 @@ $("#btnGoogle").onclick = async () => {
   try { await S.fb.auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
   catch (e) { $("#tokErr").textContent = "No se pudo iniciar sesión: " + (e.message || e.code); }
 };
+// ---------------- modo estático (GitHub Pages): sin servidor; datos que publica GitHub Actions cada ~10 min
+S.estatico = false; S.paquete = { vivo: null, series: null, tv: 0, ts: 0 };
+async function detectarEstatico() {
+  try {
+    const sonda = await fetch("/api/estado", { cache: "no-store" });
+    if (sonda.status !== 404 && sonda.status !== 405) return false;
+    const r = await fetch("data/vivo.json", { cache: "no-store" });
+    if (!r.ok) return false;
+    S.estatico = true; return true;
+  } catch { return false; }
+}
+async function jsonEstatico(nombre, campo, ttl) {
+  const k = campo === "vivo" ? "tv" : "ts";
+  if (!S.paquete[campo] || Date.now() - S.paquete[k] > ttl) {
+    S.paquete[campo] = await (await fetch(`data/${nombre}?t=${Date.now()}`, { cache: "no-store" })).json(); S.paquete[k] = Date.now();
+  }
+  return S.paquete[campo];
+}
+async function apiEstatica(path) {
+  const u = new URL(path, location.href), syms = (u.searchParams.get("symbols") || "").split(",").filter(Boolean);
+  if (u.pathname.endsWith("/api/estado")) return { claude: false, finnhub: false, estatico: true, modelo: "—", effort: "—" };
+  if (u.pathname.endsWith("/api/quotes")) {
+    const v = await jsonEstatico("vivo.json", "vivo", 55000), out = {}, err = {};
+    for (const s of syms) { const q = v.cotizaciones[s]; if (q) out[s] = { ...q, edadMin: q.time ? Math.round((Date.now() - Date.parse(q.time)) / 60000) : null }; else err[s] = "no incluido en la publicación"; }
+    S.generadoEstatico = v.generado;
+    return { cotizaciones: out, errores: err };
+  }
+  if (u.pathname.endsWith("/api/history")) {
+    const d = await jsonEstatico("series.json", "series", 15 * 60000), out = {}, err = {};
+    for (const s of syms) { if (d.series[s]) out[s] = d.series[s]; else err[s] = "no incluido; agrégalo a watchlist.json"; }
+    return { series: out, errores: err };
+  }
+  throw new Error("El análisis con Claude no está disponible en la versión de GitHub Pages; usa «Analizar (motor)» o la página de claude.ai.");
+}
 async function tokenActual() { return S.fb ? (S.fb.user ? await S.fb.user.getIdToken() : "") : S.token; }
 
 async function api(path, opts = {}) {
+  if (S.estatico) return apiEstatica(path, opts);
   const r = await fetch(path, { ...opts, headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await tokenActual()), ...(opts.headers || {}) } });
   if (r.status === 401 || r.status === 403 || r.status === 503) { const j = await r.json().catch(() => ({})); pedirToken(j.error); throw new Error(j.error || "No autorizado"); }
   const j = await r.json().catch(() => ({}));
@@ -291,11 +326,12 @@ async function refrescar() {
     try {
       const j = await api("/api/quotes?symbols=" + encodeURIComponent(todos().join(",")));
       S.q = { ...S.q, ...j.cotizaciones };
-      $("#actTxt").textContent = "Precios " + new Date().toLocaleTimeString("es-MX") + (Object.keys(j.errores || {}).length ? ` · sin datos: ${Object.keys(j.errores).join(", ")}` : "");
+      const pub = S.estatico && S.generadoEstatico ? ` · publicados por GitHub hace ${Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000))} min (se actualizan cada ~10 min en sesión)` : "";
+      $("#actTxt").textContent = "Precios " + new Date().toLocaleTimeString("es-MX") + pub + (Object.keys(j.errores || {}).length ? ` · sin datos: ${Object.keys(j.errores).join(", ")}` : "");
       pintarVivo(); revisarAlertas(); evaluarEstrategia();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
-  pollTimer = setTimeout(refrescar, (abierto ? S.cfg.poll : 300) * 1000);
+  pollTimer = setTimeout(refrescar, (abierto ? (S.estatico ? 60 : S.cfg.poll) : 300) * 1000);
 }
 document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && refrescar());
 function edadChip(q) {
@@ -670,10 +706,11 @@ function pintarBitacora() {
 // ---------------- arranque
 let arrancando = false;
 async function arrancar() {
-  if (S.fb ? !S.fb.user : !S.token) return pedirToken();
+  if (!S.estatico && (S.fb ? !S.fb.user : !S.token)) return pedirToken();
   if (arrancando) return; arrancando = true;
   try { S.srv = await api("/api/estado"); } catch { arrancando = false; return; }
-  $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : "Configura ANTHROPIC_API_KEY en Vercel";
+  $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : S.estatico ? "No disponible en GitHub Pages (requiere servidor)" : "Configura ANTHROPIC_API_KEY";
+  if (S.estatico) { $("#btnSalir").hidden = true; }
   await cargarEvidencia();
   cargarSeries(simbolosEstrategia()).then(evaluarEstrategia).catch((e) => showErr("Estrategia: " + e.message));
   const h = ls.get("tr_hist", []);
@@ -681,7 +718,7 @@ async function arrancar() {
   pintarHist(); render(); refrescar(); arrancando = false;
 }
 render();
-detectarFirebase().then((fb) => { if (!fb) arrancar(); });
+detectarFirebase().then(async (fb) => { if (fb) return; await detectarEstatico(); arrancar(); });
 }
 </script>
 </body>

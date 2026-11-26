@@ -1,0 +1,49 @@
+name: Publicar web (GitHub Pages)
+
+# Publica public/ con precios e históricos frescos. Sin servidor y sin claves obligatorias
+# (FINNHUB_API_KEY como secreto es opcional: da precios de EE. UU. en tiempo real).
+on:
+  schedule:
+    # Cada 10 min de lunes a viernes, 13:00-21:59 UTC (antes de la apertura hasta después del cierre de NY/BMV)
+    - cron: "*/10 13-21 * * 1-5"
+    # Una vez al día fuera de horario para el cierre definitivo
+    - cron: "37 23 * * 1-5"
+  push:
+    paths:
+      - "public/**"
+      - "lib/**"
+      - "scripts/build-static.js"
+      - "watchlist.json"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Construir sitio con datos frescos
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        run: node scripts/build-static.js _site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: despliegue
+        uses: actions/deploy-pages@v4
