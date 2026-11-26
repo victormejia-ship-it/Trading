@@ -33,7 +33,7 @@ def tasas(out: pathlib.Path):
 def main(out="data/historico", periodo="4y", universo="backtest/universo.json"):
     u = json.loads(pathlib.Path(universo).read_text())
     o = pathlib.Path(out); o.mkdir(parents=True, exist_ok=True)
-    for t in u["indices"] + u["sic"] + u["bmv"]:
+    for t in u["indices"] + u["sic"] + u["bmv"] + u.get("global", []):
         df = yf.download(t, period=periodo, interval="1d", auto_adjust=True, progress=False, multi_level_index=False, threads=False)
         if not len(df):
             print("sin datos", t, file=sys.stderr); continue

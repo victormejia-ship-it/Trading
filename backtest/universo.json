@@ -1,5 +1,5 @@
 {
-  "nota": "Universo de investigación: emisoras líquidas operables en GBM+ (SIC y BMV). Elegidas hoy: tiene sesgo de supervivencia.",
+  "nota": "Universo único de investigación: índices de referencia, acciones del SIC y la BMV, y ETFs globales operables en el SIC (GBM+). Elegido hoy: tiene sesgo de supervivencia.",
   "indices": [
     "SPY",
     "QQQ",
@@ -41,5 +41,28 @@
     "KOFUBL.MX",
     "AC.MX",
     "ORBIA.MX"
+  ],
+  "global": [
+    "EFA",
+    "EEM",
+    "VGK",
+    "EWJ",
+    "EWU",
+    "EWG",
+    "FXI",
+    "INDA",
+    "EWZ",
+    "EWY",
+    "EWT",
+    "EWC",
+    "EWA",
+    "ACWI",
+    "GLD",
+    "SLV",
+    "DBC",
+    "IEF",
+    "LQD",
+    "EMB",
+    "VNQ"
   ]
 }
