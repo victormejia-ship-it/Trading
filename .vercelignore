@@ -1,0 +1,13 @@
+# Vercel solo necesita: public/, api/, lib/, package.json, package-lock.json, vercel.json
+data/
+reports/
+backtest/
+worker/
+trend_risk/
+tests/
+supabase/
+web/
+scripts/
+analyze.py
+requirements.txt
+watchlist.json
