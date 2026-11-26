@@ -67,7 +67,33 @@ def senales(df: pd.DataFrame) -> pd.DataFrame:
     return e
 
 
-def simular(sen, precios, fx, cal, activos, mercado, P: Params, capital=100_000.0):
+def mercado_vectorizado(precios: dict, indices: list, activos: list, cal) -> dict:
+    """Mismas reglas que worker.features.snapshot_mercado, calculadas de una vez para todo el calendario."""
+    ind = {t: enrich(precios[t]) for t in set(indices + activos) if t in precios}
+    al = lambda t, col: ind[t][col].reindex(ind[t].index.union(cal)).ffill().reindex(cal)
+    valido = lambda t: pd.Series(np.arange(1, len(ind[t]) + 1), index=ind[t].index).reindex(ind[t].index.union(cal)).ffill().reindex(cal).fillna(0) >= 220
+    spy_c, spy50, spy200 = al("SPY", "close"), al("SPY", "sma50"), al("SPY", "sma200")
+    vix = al("^VIX", "close") if "^VIX" in ind else pd.Series(np.nan, index=cal)
+    univ = [t for t in activos + indices if t in ind and not t.startswith("^") and "=" not in t]
+    num = sum(((al(t, "close") > al(t, "sma50")) & valido(t)).astype(int) for t in univ)
+    den = sum(valido(t).astype(int) for t in univ)
+    amp = (100 * num / den.replace(0, np.nan)).round(1)
+    out = {}
+    for d in cal:
+        tope = 100
+        s200, s50 = spy_c[d] > spy200[d], spy_c[d] > spy50[d]
+        if not s200: tope = 30
+        elif not s50: tope = 60
+        v = vix[d]
+        if np.isfinite(v):
+            tope = min(tope, 25 if v > 30 else 60 if v > 20 else 100)
+        if np.isfinite(amp[d]) and amp[d] < 40:
+            tope = min(tope, 50)
+        out[d] = {"tope_exposicion_pct": tope, "rojo_forzado": bool((not s200) and np.isfinite(v) and v > 30)}
+    return out
+
+
+def simular(sen, precios, fx, cal, activos, mercado, P: Params, capital=100_000.0, tasa=None):
     efectivo, pos, pend, trades, curva = capital, {}, [], [], []
     a_mxn = lambda t, d, px: px * (fx.loc[:d].iloc[-1] if not t.endswith(".MX") else 1.0)
 
@@ -93,6 +119,8 @@ def simular(sen, precios, fx, cal, activos, mercado, P: Params, capital=100_000.
             del pos[t]
 
     for d in cal:
+        if tasa is not None:
+            efectivo *= 1 + float(tasa.get(d, 0.0))
         # 1. entradas pendientes a la apertura
         for t, peso_max, atr in pend:
             if t in pos or d not in sen[t].index:
@@ -208,39 +236,48 @@ def main(argv=None):
     ap.add_argument("--datos", default="data/historico")
     ap.add_argument("--universo", default="backtest/universo.json")
     ap.add_argument("--out", default="reports/backtest_v2")
+    ap.add_argument("--inicio", help="fecha inicial (por defecto: últimas 2×252 sesiones)")
+    ap.add_argument("--corte", help="inicio del tramo de validación (por defecto: mitad)")
     a = ap.parse_args(argv)
     u = json.loads(pathlib.Path(a.universo).read_text())
     precios = cargar(a.datos)
     indices = [t for t in u["indices"] if t in precios]
-    activos = [t for t in u["sic"] + u["bmv"] if t in precios and len(precios[t]) >= 220 + 2 * SESIONES_TRAMO]
+    activos = [t for t in u["sic"] + u["bmv"] if t in precios and len(precios[t]) >= 260]
     fx = precios["MXN=X"]["close"]
     sen = {t: senales(precios[t]) for t in activos}
-    cal_total = precios["SPY"].index[-2 * SESIONES_TRAMO:]
-    tramos = {"tramo1_ajuste": cal_total[:SESIONES_TRAMO], "tramo2_validacion": cal_total[SESIONES_TRAMO:]}
-    ind = {t: enrich(precios[t]) for t in set(indices + activos)}
-    mercado = {d: snapshot_mercado({t: precios[t].loc[:d] for t in ind}, indices, activos, {t: ind[t].loc[:d] for t in ind}) for d in cal_total}
+    spy = precios["SPY"].index
+    cal_total = spy[spy >= max(pd.Timestamp(a.inicio), fx.index[0] + pd.Timedelta(days=30))] if a.inicio else spy[-2 * SESIONES_TRAMO:]
+    corte = pd.Timestamp(a.corte) if a.corte else cal_total[len(cal_total) // 2]
+    tramos = {"tramo1_ajuste": cal_total[cal_total < corte], "tramo2_validacion": cal_total[cal_total >= corte]}
+    mercado = mercado_vectorizado(precios, indices, activos, cal_total)
+    tasa = None
+    try:
+        from backtest.cartera_nucleo import tasa_diaria
+        tasa, _ = tasa_diaria(a.datos, cal_total)
+    except Exception:
+        pass
 
     rejilla = [Params(entrada=e, k_stop=k, parcial=pc) for e, k, pc in itertools.product(["retroceso", "ruptura55"], [2.0, 3.0], [True, False])]
     out = {"tramos": {k: {"inicio": str(v[0].date()), "fin": str(v[-1].date())} for k, v in tramos.items()},
-           "activos": activos, "costos_por_lado_pct": round(100 * COSTO, 2), "protocolo":
+           "activos": activos, "costos_por_lado_pct": round(100 * COSTO, 2), "efectivo_rinde_cetes": tasa is not None, "protocolo":
            "Se elige la combinación con mejor MAR (CAGR / caída máx.) en el tramo 1 con al menos 10 operaciones. El tramo 2 se mide una sola vez con esa combinación; los demás resultados del tramo 2 se muestran solo como referencia.",
            "rejilla": []}
     for P in rejilla:
         fila = {"params": asdict(P), "nombre": P.nombre()}
         for k, cal in tramos.items():
-            tr, cu = simular(sen, precios, fx, cal, activos, mercado, P)
-            fila[k] = {"metricas": metricas(cu, tr), "trades": tr, "curva": [{"fecha": c["fecha"], "equity": round(c["equity"], 2)} for c in cu]}
+            tr, cu = simular(sen, precios, fx, cal, activos, mercado, P, tasa=tasa)
+            fila[k] = {"metricas": metricas(cu, tr), "trades": tr, "curva": [{"fecha": c["fecha"], "equity": round(float(c["equity"]), 2)} for c in cu[::5]]}
         out["rejilla"].append(fila)
-        print(P.nombre(), "| T1", fila["tramo1_ajuste"]["metricas"], "| T2", fila["tramo2_validacion"]["metricas"])
+        m1, m2 = fila["tramo1_ajuste"]["metricas"], fila["tramo2_validacion"]["metricas"]
+        print(f"{P.nombre():38s} T1 {m1['cagr_pct']:6.2f}%/{m1['max_dd_pct']:6.1f} n={m1['operaciones']:4d} R={m1['r_promedio']}  |  T2 {m2['cagr_pct']:6.2f}%/{m2['max_dd_pct']:6.1f} n={m2['operaciones']:4d} R={m2['r_promedio']}")
 
     validas = [f for f in out["rejilla"] if f["tramo1_ajuste"]["metricas"]["operaciones"] >= 10]
     elegida = max(validas or out["rejilla"], key=lambda f: f["tramo1_ajuste"]["metricas"]["mar"])
     out["elegida"] = elegida["nombre"]
-    # Sin filtro de mercado, misma combinación (para medir el valor del filtro)
     Pf = Params(**{**elegida["params"], "filtro_mercado": False})
-    out["elegida_sin_filtro"] = {k: metricas(*reversed(simular(sen, precios, fx, cal, activos, mercado, Pf))) for k, cal in tramos.items()}
+    out["elegida_sin_filtro"] = {k: metricas(*reversed(simular(sen, precios, fx, cal, activos, mercado, Pf, tasa=tasa))) for k, cal in tramos.items()}
     out["benchmarks"] = {k: {"SPY (en MXN)": buy_hold(precios, fx, ["SPY"], cal), "IPC": buy_hold(precios, None, ["^MXX"], cal),
-                             "Universo igual ponderado (MXN)": buy_hold(precios, fx, activos, cal)} for k, cal in tramos.items()}
+                             "Universo igual ponderado (MXN)": buy_hold(precios, fx, [t for t in activos if precios[t].index[0] <= cal[0]], cal)} for k, cal in tramos.items()}
     o = pathlib.Path(a.out); o.mkdir(parents=True, exist_ok=True)
     (o / "resultado.json").write_text(json.dumps(out, ensure_ascii=False, separators=(",", ":"), default=str))
     print("ELEGIDA (por tramo 1):", out["elegida"])
