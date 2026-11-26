@@ -359,6 +359,59 @@
       distancia_pct: isNum(umbral) ? rnd((c[i] / umbral - 1) * 100) : null, ultimo_cambio: ultimoCambio, estados };
   }
 
-  const api = { enrich, analizar, mercado, validarMercado, validarActivo, fallbackMercado, fallbackActivo, a100, ENUM, CFG, regimen, ultimoHabilDelMes };
+  // ---------- patrones de velas y estrategias de traders (port exacto de backtest/patrones.py: detectar)
+  function rollMin(a, n) { return a.map((_, i) => (i < n - 1 ? NaN_ : Math.min(...a.slice(i - n + 1, i + 1)))); }
+  function rollMax(a, n) { return a.map((_, i) => (i < n - 1 ? NaN_ : Math.max(...a.slice(i - n + 1, i + 1)))); }
+  const sh = (a, k) => a.map((_, i) => (i - k >= 0 && i - k < a.length ? a[i - k] : NaN_));
+  function patronesVela(s) {
+    const { o, h, l, c, v } = s, N = c.length;
+    const cuerpo = c.map((x, i) => x - o[i]), acu = cuerpo.map(Math.abs), rango = h.map((x, i) => (x - l[i]) || NaN_);
+    const sup = h.map((x, i) => x - Math.max(o[i], c[i])), inf = l.map((x, i) => Math.min(o[i], c[i]) - x);
+    const tr = h.map((_, i) => i === 0 ? h[0] - l[0] : Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+    const atr = wilder(tr, 14), c5 = sh(c, 5), c1 = sh(c, 1), o1 = sh(o, 1), o2 = sh(o, 2), c2 = sh(c, 2), c7 = sh(c, 7);
+    const sma50 = sma(c, 50), sma150 = sma(c, 150), sma200 = sma(c, 200), ema20 = ewm(c, 2 / 21, 1);
+    const cu1 = sh(cuerpo, 1), cu2 = sh(cuerpo, 2), ac1 = sh(acu, 1), ac2 = sh(acu, 2), at1 = sh(atr, 1), at2 = sh(atr, 2);
+    const up = h.map((x, i) => (i ? x - h[i - 1] : NaN_)), dn = l.map((x, i) => (i ? l[i - 1] - x : NaN_));
+    const pdm = up.map((u, i) => (u > dn[i] && u > 0 ? u : 0)), ndm = dn.map((d, i) => (d > up[i] && d > 0 ? d : 0));
+    const atr14 = wilder(tr, 14), pdi = wilder(pdm, 14).map((x, i) => 100 * x / atr14[i]), ndi = wilder(ndm, 14).map((x, i) => 100 * x / atr14[i]);
+    const dx = pdi.map((x, i) => { const sm = x + ndi[i]; return sm ? 100 * Math.abs(x - ndi[i]) / sm : NaN_; });
+    const adx = wilder(dx, 14), r2 = rsi(c, 2), vol20 = sma(v, 20), vol50 = sma(v, 50);
+    const rngs = h.map((x, i) => x - l[i]), rng7 = rollMin(rngs, 7), minL20 = sh(rollMin(l, 20), 1), maxH252 = sh(rollMax(h, 252), 1);
+    const P = {}; const k = Object.keys(PAT_INFO); k.forEach((x) => (P[x] = new Array(N).fill(false)));
+    for (let i = 0; i < N; i++) {
+      const cae = c[i] < c5[i], sube = c[i] > c5[i], m1 = (o1[i] + c1[i]) / 2, m2 = (o2[i] + c2[i]) / 2;
+      const largo1 = ac1[i] > 0.6 * at1[i], largo2 = ac2[i] > 0.6 * at2[i], peq1 = ac1[i] < 0.3 * ac2[i];
+      P.martillo[i] = acu[i] > 0 && inf[i] >= 2 * acu[i] && sup[i] <= 0.1 * rango[i] && cae;
+      P.estrella_fugaz[i] = acu[i] > 0 && sup[i] >= 2 * acu[i] && inf[i] <= 0.1 * rango[i] && sube;
+      P.envolvente_alcista[i] = cu1[i] < 0 && cuerpo[i] > 0 && o[i] <= c1[i] && c[i] >= o1[i] && acu[i] > ac1[i] && cae;
+      P.envolvente_bajista[i] = cu1[i] > 0 && cuerpo[i] < 0 && o[i] >= c1[i] && c[i] <= o1[i] && acu[i] > ac1[i] && sube;
+      P.estrella_manana[i] = cu2[i] < 0 && largo2 && peq1 && cuerpo[i] > 0 && c[i] > m2 && c2[i] < c7[i];
+      P.estrella_tarde[i] = cu2[i] > 0 && largo2 && peq1 && cuerpo[i] < 0 && c[i] < m2 && c2[i] > c7[i];
+      P.linea_penetrante[i] = cu1[i] < 0 && largo1 && o[i] < c1[i] && c[i] > m1 && c[i] < o1[i] && cae;
+      P.nube_oscura[i] = cu1[i] > 0 && largo1 && o[i] > c1[i] && c[i] < m1 && c[i] > o1[i] && sube;
+      const s3 = cuerpo[i] > 0 && cu1[i] > 0 && cu2[i] > 0 && c[i] > c1[i] && c1[i] > c2[i];
+      P.tres_soldados[i] = s3 && sup[i] <= 0.25 * acu[i] && sup[i - 1] <= 0.25 * ac1[i] && o[i] > o1[i] && o1[i] > o2[i] && acu[i] > 0.5 * atr[i];
+      const b3 = cuerpo[i] < 0 && cu1[i] < 0 && cu2[i] < 0 && c[i] < c1[i] && c1[i] < c2[i];
+      P.tres_cuervos[i] = b3 && inf[i] <= 0.25 * acu[i] && inf[i - 1] <= 0.25 * ac1[i] && o[i] < o1[i] && o1[i] < o2[i] && acu[i] > 0.5 * atr[i];
+      P.inside_ruptura[i] = i >= 2 && h[i - 1] < h[i - 2] && l[i - 1] > l[i - 2] && c[i] > h[i - 2] && c[i] > sma50[i];
+      P.nr7_ruptura[i] = i >= 1 && rngs[i - 1] <= rng7[i - 1] && c[i] > h[i - 1];
+      P.holy_grail[i] = adx[i] > 30 && pdi[i] > ndi[i] && l[i] <= ema20[i] && c[i] > ema20[i];
+      P.rsi2_connors[i] = c[i] > sma200[i] && r2[i] < 10;
+      P.spring_wyckoff[i] = l[i] < minL20[i] && c[i] > minL20[i] && v[i] > vol20[i];
+      P.oops_williams[i] = i >= 1 && o[i] < l[i - 1] && c[i] > l[i - 1];
+      P.ruptura_52s[i] = c[i] >= maxH252[i] && sma50[i] > sma150[i] && sma150[i] > sma200[i] && v[i] >= 1.4 * vol50[i];
+    }
+    return { P, sobre200: c.map((x, i) => x > sma200[i]), atr };
+  }
+  const PAT_INFO = { martillo: 1, estrella_fugaz: 1, envolvente_alcista: 1, envolvente_bajista: 1, estrella_manana: 1, estrella_tarde: 1, linea_penetrante: 1,
+    nube_oscura: 1, tres_soldados: 1, tres_cuervos: 1, inside_ruptura: 1, nr7_ruptura: 1, holy_grail: 1, rsi2_connors: 1, spring_wyckoff: 1, oops_williams: 1, ruptura_52s: 1 };
+  // Patrones presentes en las últimas `dias` velas: [{clave, fecha, hace}]
+  function patronesRecientes(s, dias = 3) {
+    const { P, sobre200 } = patronesVela(s), N = s.c.length, out = [];
+    for (const k of Object.keys(P)) for (let j = N - 1; j >= Math.max(0, N - dias); j--) if (P[k][j]) { out.push({ clave: k, fecha: s.t[j], hace: N - 1 - j }); break; }
+    return { lista: out, sobre200: sobre200[N - 1] };
+  }
+
+  const api = { enrich, analizar, mercado, validarMercado, validarActivo, fallbackMercado, fallbackActivo, a100, ENUM, CFG, regimen, ultimoHabilDelMes, patronesVela, patronesRecientes };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.Motor = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

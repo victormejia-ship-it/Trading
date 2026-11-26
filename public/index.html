@@ -139,6 +139,12 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
       <h2>Alertas de hoy <span class="mut small mono" id="alEstado"></span></h2>
       <ul class="t" id="alertas"><li class="mut">Sin alertas.</li></ul>
     </section>
+    <section class="card">
+      <h2>Laboratorio de estrategias <span class="mut small mono" id="labPeriodo"></span></h2>
+      <p class="small ink2" id="labResumen"></p>
+      <div class="scroll"><table id="tLab"><thead><tr><th>Estrategia</th><th class="num">Veces</th><th class="num">2006-15</th><th class="num">2016-26</th><th>Veredicto</th></tr></thead><tbody></tbody></table></div>
+      <p class="small mut" id="labNota"></p>
+    </section>
   </div>
 
   <div class="col">
@@ -155,7 +161,9 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
         <div class="legend" id="legNiv"></div>
       </section>
       <div class="grid2">
-        <section class="card"><h2>Escenarios</h2><div id="dEsc"></div><p class="small mut" id="dConf"></p></section>
+        <section class="card"><h2>Escenarios históricos <span class="tabs" style="margin:0" id="hzTabs"><button data-h="5">5 días</button><button data-h="10" class="on">10 días</button><button data-h="20">20 días</button></span></h2>
+          <div id="dEscHist"></div>
+          <details style="margin-top:8px"><summary class="mono small">Escenarios del motor / Claude (heurísticos)</summary><div id="dEsc"></div><p class="small mut" id="dConf"></p></details></section>
         <section class="card"><h2>Plan de riesgo</h2><dl class="kv" id="dPlan"></dl></section>
       </div>
       <div class="grid2">
@@ -173,6 +181,7 @@ footer{color:var(--mut);font-size:12.5px;padding-block:8px 28px}
         </div>
         <dl class="kv" id="kOut" style="margin-top:12px"></dl>
       </section>
+      <section class="card" style="margin-top:16px"><h2>Velas y estrategias de traders <span class="mut small mono">últimas 3 sesiones</span></h2><div id="dVelas"></div></section>
       <section class="card" style="margin-top:16px"><h2>Noticias analizadas</h2><div id="dNews" class="ink2"></div></section>
       <section class="card" style="margin-top:16px">
         <h2>Visor JSON</h2>
@@ -358,7 +367,7 @@ function progreso(items) {
 }
 async function analizar(conClaude) {
   hideErr(); const c = S.cfg;
-  if (conClaude && !S.srv?.claude) return showErr("Falta ANTHROPIC_API_KEY en Vercel; usa «Analizar (motor)» o configúrala.");
+  if (conClaude && !S.srv?.claude) return showErr(S.estatico ? "El análisis con Claude no está disponible en la versión de GitHub Pages; usa «Analizar (motor)» o tu página de claude.ai." : "Falta la clave de Claude en el servidor; usa «Analizar (motor)».");
   $("#btnClaude").disabled = $("#btnMotor").disabled = true; $("#progBox").hidden = false;
   $("#progTit").textContent = conClaude ? "Analizando con Claude (≈20-50 s por activo)…" : "Calculando con precios actuales…";
   const marca = progreso(["MERCADO", ...c.activos]);
@@ -394,7 +403,7 @@ async function analizar(conClaude) {
     guardarReporte(rep);
     if (rep.errores.length) showErr("Omitidos: " + rep.errores.join(" · "));
   } catch (e) { showErr(e.name === "AbortError" ? "Análisis detenido." : "Error: " + e.message); }
-  finally { $("#progBox").hidden = true; $("#btnClaude").disabled = $("#btnMotor").disabled = false; $("#btnStop").hidden = true; }
+  finally { $("#progBox").hidden = true; $("#btnMotor").disabled = false; $("#btnClaude").disabled = !S.srv?.claude; $("#btnStop").hidden = true; }
 }
 $("#btnMotor").onclick = () => analizar(false);
 $("#btnClaude").onclick = () => analizar(true);
@@ -436,7 +445,7 @@ function revisarAlertas() {
     const ev = [];
     if (n.stop_loss && p <= n.stop_loss) ev.push(["stop", "r", `${a.ticker} tocó el stop ${fmt(n.stop_loss)} (precio ${fmt(p)})`]);
     if (n.resistencia_1 && p >= n.resistencia_1) ev.push(["obj1", "g", `${a.ticker} alcanzó el objetivo 1 ${fmt(n.resistencia_1)}: vender 50%`]);
-    if ((s === "COMPRAR" || s === "ESPERAR_SOPORTE") && atr && n.entrada && Math.abs(p - n.entrada) <= 0.25 * atr) ev.push(["entrada", "b", `${a.ticker} en zona de entrada ${fmt(n.entrada)} ±0.25×ATR (precio ${fmt(p)})${s === "COMPRAR" ? "" : ": revisar confirmación"}`]);
+    if ((s === "COMPRAR" || s === "ESPERAR_SOPORTE") && atr && n.entrada && Math.abs(p - n.entrada) <= 0.25 * atr) ev.push(["entrada", "b", `${a.ticker} en zona de entrada del swing ${fmt(n.entrada)} (precio ${fmt(p)}). Informativa: el swing no pasó la validación`]);
     if (s === "ESPERAR_RUPTURA" && n.entrada && p > n.entrada) ev.push(["ruptura", "b", `${a.ticker} rompe ${fmt(n.entrada)}: confirmar con cierre diario y volumen`]);
     if (s === "VENDER_TOMA_GANANCIAS" && n.trailing_stop && p < n.trailing_stop) ev.push(["trailing", "y", `${a.ticker} perdió el trailing ${fmt(n.trailing_stop)}`]);
     for (const [tipo, c, txt] of ev) { const k = `${hoy}|${a.ticker}|${tipo}`; if (!S.alertas[k]) { S.alertas[k] = { c, txt, t: new Date().toLocaleTimeString("es-MX") }; nuevas.push(txt); } }
@@ -499,7 +508,7 @@ function filaActivo(t) {
   const x = a?.analisis, n = a?.plan?.niveles || {}, p = q?.price;
   const dist = (lvl) => (Number.isFinite(p) && lvl ? pct((p / lvl - 1) * 100) : "—");
   return `<td><b>${esc(t)}</b><br>${fmt(p)} <span class="${q?.changePct >= 0 ? "g" : "r"}">${pct(q?.changePct, 2)}</span><br>${edadChip(q)}</td>
-    <td>${x ? chip(FASE, x.fase) + "<br>" + chip(SENAL, x.senal) : '<span class="mut">sin analizar</span>'}</td>
+    <td>${x ? chip(FASE, x.fase) + "<br>" + chip(SENAL, x.senal) : '<span class="mut">sin analizar</span>'}${(() => { const v = S.pat && velasDe(t); return v && v.lista.length ? `<br><span class="small mut">Velas: ${v.lista.map((p) => esc(S.pat.patrones[p.clave].nombre)).join(", ")}</span>` : ""; })()}</td>
     <td class="num">${dist(n.entrada)}</td><td class="num">${dist(n.stop_loss)}</td>
     <td class="num">${a?.plan?.rr != null ? "1:" + fmt(a.plan.rr) : "—"}</td><td class="num">${x ? fmt(x.tamano_posicion_final_pct, 1) + "%" : "—"}</td>`;
 }
@@ -540,7 +549,7 @@ function seleccionar(t) {
     + a.noticias.map((nn) => { const r = rel[nn.id], u = safeUrl(nn.url); return `<li>${r ? chip(CS, r.sentimiento) + " " : ""}${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(nn.titulo)}</a>` : esc(nn.titulo)} <span class="mut">${esc(nn.fuente)} ${esc((nn.fecha || "").slice(0, 16).replace("T", " "))}</span>${r?.impacto ? `<br><span class="mut">${esc(r.impacto)}</span>` : ""}</li>`; }).join("") + "</ul>"
     : `<p class="mut">${x.fuente === "CLAUDE" ? "No hubo noticias de las últimas 24 h para " + esc(t) + "." : "El análisis con motor no lee noticias; usa «Analizar con Claude»."}</p>`;
   $("#kEnt").value = n.entrada ?? ""; $("#kStop").value = n.stop_loss ?? ""; $("#kTgt").value = n.resistencia_1 ?? ""; $("#kRisk").value = S.cfg.riesgo;
-  calc(); pintarJSON();
+  calc(); pintarJSON(); pintarEscHist(t); pintarVelas(t);
 }
 // Calculadora en MXN: SIC convierte con MXN=X
 function calc() {
@@ -594,6 +603,7 @@ async function pintarGrafico(a) {
   chart.subscribeCrosshairMove((ev) => { const t = typeof ev.time === "string" ? ev.time : ev.time ? `${ev.time.year}-${String(ev.time.month).padStart(2, "0")}-${String(ev.time.day).padStart(2, "0")}` : null; leyenda(t && pos[t] != null ? pos[t] : N - 1); });
   $("#legNiv").innerHTML = niv.map(([t, p, c, st]) => `<span><i style="border-color:${c};border-top-style:${st === LS.Solid ? "solid" : "dashed"}"></i>${esc(t)} ${fmt(p)}</span>`).join("");
   const q = S.q[a.ticker]; if (q) actualizarVela(q);
+  pintarEscHist(a.ticker); pintarVelas(a.ticker);
 }
 function actualizarVela(q) {
   if (!velas || !ultima || !Number.isFinite(q.price) || !q.time) return;
@@ -703,6 +713,58 @@ function pintarBitacora() {
   $("#bitacora").innerHTML = `<h3 class="small" style="margin:12px 0 4px">Bitácora de ejecuciones</h3>` + (S.bitacora.length ? `<div class="scroll"><table><thead><tr><th>Fecha</th><th>Acción</th><th class="num">Precio</th><th class="num">Monto</th></tr></thead><tbody>${S.bitacora.map((b) => `<tr><td>${esc(b.fecha)}</td><td>${esc(b.accion)} ${esc(b.simbolo)}</td><td class="num">${fmt(b.precio)}</td><td class="num">$${fmt(b.monto, 0)}</td></tr>`).join("")}</tbody></table></div>` : `<p class="small mut">Aún no registras ejecuciones.</p>`);
 }
 
+// ---------------- patrones de velas: evidencia de 20 años (data/patrones.json) + detección en vivo
+S.pat = null; S.hz = "10"; S.velasCache = {};
+async function cargarPatrones() {
+  try { S.pat = await (await fetch("data/patrones.json", { cache: "no-store" })).json(); } catch { S.pat = null; }
+  pintarLaboratorio();
+}
+const VEREDICTO = (info) => info.validado ? `<span class="chip g">✓ Validado</span>` : `<span class="chip n">✕ Sin ventaja</span>`;
+function pintarLaboratorio() {
+  if (!S.pat) { $("#labResumen").textContent = "Sin datos del laboratorio."; return; }
+  const P = Object.values(S.pat.patrones), val = P.filter((x) => x.validado).length;
+  $("#labPeriodo").textContent = `${S.pat.periodo.inicio.slice(0, 4)}-2026 · ${S.pat.activos.length} activos`;
+  $("#labResumen").textContent = `${P.length} estrategias de lectura de velas medidas en 20 años, con costos de GBM. Validadas: ${val}. Ventaja = rendimiento a 10 días tras la señal menos el rendimiento normal del activo.`;
+  $("#tLab tbody").innerHTML = P.map((x) => { const a = x.tramos.t1["10"], b = x.tramos.t2["10"], n = (a.n || 0) + (b.n || 0);
+    return `<tr><td><b>${esc(x.nombre)}</b><br><span class="mut">${esc(x.autor)} · ${x.tipo === "alcista" ? "compra" : "venta"}</span></td><td class="num">${fmt(n, 0)}</td>
+      <td class="num ${a.ventaja_pct > 0 ? "g" : "r"}">${pct(a.ventaja_pct, 2)}</td><td class="num ${b.ventaja_pct > 0 ? "g" : "r"}">${pct(b.ventaja_pct, 2)}</td><td>${VEREDICTO(x)}</td></tr>`; }).join("");
+  $("#labNota").textContent = `Conclusión: ninguna superó a mantener el activo después de costos (${S.pat.costo_ida_vuelta_pct}% por operación completa). La única con señal bruta constante en ambos tramos es el RSI(2) de Connors (~+0.2-0.3% a 5 días antes de costos), insuficiente con las comisiones actuales. Úsalas como contexto, no como gatillo.`;
+}
+function velasDe(t) {
+  const s = S.series[t]; if (!s || s.c.length < 260) return null;
+  const k = `${t}|${s.t.at(-1)}|${s.c.at(-1)}`;
+  if (!S.velasCache[k]) S.velasCache[k] = Motor.patronesRecientes(s, 3);
+  return S.velasCache[k];
+}
+function pintarVelas(t) {
+  const r = velasDe(t), el = $("#dVelas");
+  if (!S.pat) { el.innerHTML = `<p class="mut">Sin datos de patrones.</p>`; return; }
+  if (!r) { el.innerHTML = `<p class="mut">Cargando histórico…</p>`; return; }
+  if (!r.lista.length) { el.innerHTML = `<p class="mut">Ningún patrón de los ${Object.keys(S.pat.patrones).length} estudiados apareció en las últimas 3 sesiones de ${esc(t)}.</p>`; return; }
+  el.innerHTML = r.lista.map(({ clave, fecha, hace }) => {
+    const x = S.pat.patrones[clave], h = S.hz, a = x.tramos.todo[h], v = x.tramos.t2[h];
+    return `<div class="manga" style="margin-bottom:8px"><h3><span>${esc(x.nombre)} <span class="chip ${x.tipo === "alcista" ? "g" : "r"}">${x.tipo === "alcista" ? "▲ señal de compra" : "▼ señal de venta"}</span></span>${VEREDICTO(x)}</h3>
+      <div class="small mut">${esc(x.autor)} · ${hace === 0 ? "hoy" : `hace ${hace} sesión${hace > 1 ? "es" : ""}`} (${esc(fecha)})</div>
+      <p class="small ink2" style="margin:6px 0">${esc(x.descripcion)}</p>
+      <dl class="kv"><dt>Apariciones en 20 años</dt><dd>${fmt(a.n, 0)}</dd><dt>Rendimiento medio a ${h} días (con costos)</dt><dd>${pct(a.ret_medio_pct, 2)}</dd>
+      <dt>Rendimiento normal del activo</dt><dd>${pct(a.base_pct, 2)}</dd><dt>Ventaja</dt><dd class="${a.ventaja_pct > 0 ? "g" : "r"}">${pct(a.ventaja_pct, 2)}</dd>
+      <dt>Acierto</dt><dd>${fmt(a.acierto_pct, 1)}%</dd><dt>Validación 2016-26</dt><dd class="${v.ventaja_pct > 0 ? "g" : "r"}">${pct(v.ventaja_pct, 2)}</dd>
+      <dt>Escenarios tras el patrón</dt><dd>▲ ${fmt(a.p_sube, 0)}% · ◇ ${fmt(a.p_lateral, 0)}% · ▼ ${fmt(a.p_baja, 0)}%</dd></dl></div>`;
+  }).join("") + `<p class="small mut">Escenarios: sube más de ${S.pat.umbrales_escenario_pct[S.hz]}%, lateral o baja más de ${S.pat.umbrales_escenario_pct[S.hz]}% en ${S.hz} días, medidos en todas las apariciones del patrón en ${S.pat.activos.length} activos.</p>`;
+}
+function pintarEscHist(t) {
+  const el = $("#dEscHist"), b = S.pat?.base_activos?.[t];
+  const r = velasDe(t);
+  if (!S.pat) { el.innerHTML = `<p class="mut">Sin datos históricos.</p>`; return; }
+  if (!b) { el.innerHTML = `<p class="mut">${esc(t)} no está en el estudio de 20 años (agrégalo a backtest/universo.json para incluirlo).</p>`; return; }
+  const reg = r ? (r.sobre200 ? "sobre" : "bajo") : "sobre", e = b[reg][S.hz], u = S.pat.umbrales_escenario_pct[S.hz];
+  const fila = (nom, p, col) => `<div class="esc"><span>${nom}</span><div class="track"><div class="fill" style="width:${p}%;background:${col}"></div></div><b class="num">${fmt(p, 0)}%</b></div>`;
+  el.innerHTML = fila("Sube", e.p_sube, "var(--up)") + `<div class="desc">más de +${u}% en ${S.hz} días</div>` + fila("Lateral", e.p_lateral, "var(--mut)") + `<div class="desc">entre −${u}% y +${u}%</div>`
+    + fila("Baja", e.p_baja, "var(--dn)") + `<div class="desc">más de −${u}%</div>`
+    + `<p class="small ink2" style="margin-top:8px">Con el precio <b>${reg === "sobre" ? "por encima" : "por debajo"}</b> de su media de 200 días, en 20 años (${fmt(e.n, 0)} casos) ${esc(t)} tuvo a ${S.hz} días: mediana ${pct(e.p50, 2)}, 1 de cada 10 veces peor que ${pct(e.p10, 1)} y 1 de cada 10 mejor que ${pct(e.p90, 1)}.</p>`;
+}
+document.querySelectorAll("#hzTabs button").forEach((b) => (b.onclick = () => { S.hz = b.dataset.h; document.querySelectorAll("#hzTabs button").forEach((x) => x.classList.toggle("on", x === b)); if (S.sel) { pintarEscHist(S.sel); pintarVelas(S.sel); } }));
+
 // ---------------- arranque
 let arrancando = false;
 async function arrancar() {
@@ -711,7 +773,7 @@ async function arrancar() {
   try { S.srv = await api("/api/estado"); } catch { arrancando = false; return; }
   $("#btnClaude").disabled = !S.srv.claude; $("#btnClaude").title = S.srv.claude ? "" : S.estatico ? "No disponible en GitHub Pages (requiere servidor)" : "Configura ANTHROPIC_API_KEY";
   if (S.estatico) { $("#btnSalir").hidden = true; }
-  await cargarEvidencia();
+  await cargarEvidencia(); cargarPatrones();
   cargarSeries(simbolosEstrategia()).then(evaluarEstrategia).catch((e) => showErr("Estrategia: " + e.message));
   const h = ls.get("tr_hist", []);
   if (h.length) S.rep = h[0]; else await cargarWorker(false);
