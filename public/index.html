@@ -444,7 +444,11 @@ $("#fLogin").addEventListener("submit", (ev) => { if (S.fb) { ev.preventDefault(
 function mercadoAbierto() {
   const ny = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
   const d = ny.getDay(), m = ny.getHours() * 60 + ny.getMinutes();
-  return d >= 1 && d <= 5 && m >= 570 && m < 960;
+  if (!(d >= 1 && d <= 5 && m >= 570 && m < 960)) return false;
+  // Feriados de EE. UU. (p. ej. Acción de Gracias): en horario hábil, si el último precio de SPY no es de hoy, está cerrado
+  const t = S.q?.SPY?.time;
+  if (t && new Date(t).toLocaleDateString("en-CA", { timeZone: "America/New_York" }) !== new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" }) && m > 600) return false;
+  return true;
 }
 
 // ---------------- cotizaciones en vivo
@@ -459,8 +463,11 @@ async function refrescar() {
     try {
       const j = await api("/api/quotes?symbols=" + encodeURIComponent(todos().join(",")));
       S.q = { ...S.q, ...j.cotizaciones };
-      const edad = S.estatico && S.generadoEstatico ? Math.max(0, Math.round((Date.now() - Date.parse(S.generadoEstatico)) / 60000)) : 0;
-      $("#actTxt").textContent = S.estatico ? `Precios de hace ${edad < 60 ? edad + " min" : Math.round(edad / 60) + " h"}` : "Precios " + new Date().toLocaleTimeString("es-MX");
+      const tq = S.q.SPY?.time ? Date.parse(S.q.SPY.time) : null, abiertoAhora = mercadoAbierto();
+      $("#dotMkt").classList.toggle("on", abiertoAhora); $("#mktTxt").textContent = abiertoAhora ? "Mercado abierto" : "Mercado cerrado";
+      $("#actTxt").textContent = !tq ? "Sin precios todavía"
+        : abiertoAhora ? `· precios de hace ${Math.max(0, Math.round((Date.now() - tq) / 60000))} min`
+        : `· precios del cierre del ${new Date(tq).toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short", timeZone: "America/New_York" })}`;
       pintarVivo(); revisarAlertas(); evaluarEstrategia(); evaluarPlan(); pintarLab();
     } catch (e) { $("#actTxt").textContent = "Error de precios: " + e.message; }
   }
