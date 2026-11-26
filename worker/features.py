@@ -61,13 +61,16 @@ def snapshot_activo(df: pd.DataFrame, ticker: str, cfg: Config, dias_grafico: in
             "contexto": contexto, "serie": serie_grafico(df, dias_grafico)}
 
 
-def snapshot_mercado(precios: dict[str, pd.DataFrame], indices: list[str], activos: list[str]) -> dict:
-    """Variables de régimen + topes deterministas de exposición."""
+def snapshot_mercado(precios: dict[str, pd.DataFrame], indices: list[str], activos: list[str],
+                     enriquecidos: dict[str, pd.DataFrame] | None = None) -> dict:
+    """Variables de régimen + topes deterministas de exposición.
+    `enriquecidos` (opcional): indicadores ya calculados y cortados a la fecha (backtest); deben ser causales."""
+    _e = (lambda t: enriquecidos[t]) if enriquecidos is not None else (lambda t: enrich(precios[t]))
     filas = {}
     for t in indices:
         if t not in precios:
             continue
-        e = enrich(precios[t])
+        e = _e(t)
         l = e.iloc[-1]
         filas[t] = {
             "precio": _num(l.close), "sma50": _num(l.sma50), "sma200": _num(l.sma200), "rsi14": _num(l.rsi14, 1),
@@ -79,7 +82,7 @@ def snapshot_mercado(precios: dict[str, pd.DataFrame], indices: list[str], activ
             "macd_hist": _num(l.macd_hist, 4),
         }
     univ = [t for t in activos + indices if t in precios and not t.startswith("^") and "=" not in t]
-    sobre50 = [bool(enrich(precios[t]).iloc[-1].pipe(lambda r: r.close > r.sma50)) for t in univ]
+    sobre50 = [bool(_e(t).iloc[-1].pipe(lambda r: r.close > r.sma50)) for t in univ]
     amplitud = round(100 * sum(sobre50) / len(sobre50), 1) if sobre50 else None
 
     # ---- Topes duros (el LLM solo puede ser MÁS conservador que esto)
